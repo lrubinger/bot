@@ -34,25 +34,23 @@ jobs:
             -o ServerAliveInterval=30 \
             root@138.197.86.14 \
             'set -e
-             APP_DIR=/root/workspace/bot
-             mkdir -p /root/workspace
-             if [ ! -d "$APP_DIR/.git" ]; then
-               git clone https://github.com/lrubinger/bot.git "$APP_DIR"
-             else
-               cd "$APP_DIR"
+             APP_DIR=/home/deploy/bot
+             test -d "$APP_DIR/.git" || { echo "Execute primeiro installer/install_primaria"; exit 1; }
+             test -f "$APP_DIR/backend/.env" || { echo "Arquivo backend/.env não configurado"; exit 1; }
+             test -f "$APP_DIR/frontend/.env" || { echo "Arquivo frontend/.env não configurado"; exit 1; }
+             sudo -u deploy -H bash -lc "
+               set -e
+               cd /home/deploy/bot
                git pull --ff-only origin main
-             fi
-             cd "$APP_DIR"
-             test -f backend/.env || { echo "Arquivo backend/.env não configurado"; exit 1; }
-             test -f frontend/.env || { echo "Arquivo frontend/.env não configurado"; exit 1; }
-             cd backend
-             npm install
-             npm run build
-             npm run db:migrate
-             pm2 restart portoplan-bot-backend || pm2 start dist/server.js --name portoplan-bot-backend
-             cd ../frontend
-             npm install
-             npm run build
-             pm2 restart portoplan-bot-frontend || pm2 start server.js --name portoplan-bot-frontend
-             pm2 save
-             pm2 status'
+               cd backend
+               npm install
+               npm run build
+               npm run db:migrate
+               pm2 restart bot-backend
+               cd ../frontend
+               npm install
+               npm run build
+               pm2 restart bot-frontend
+               pm2 save
+               pm2 status
+             "'
