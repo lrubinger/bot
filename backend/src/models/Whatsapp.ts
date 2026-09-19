@@ -105,12 +105,11 @@ class Whatsapp extends Model<Whatsapp> {
   @Column
   token: string;
 
-  @Default(0)
   @Column
-  timeSendQueue: number;
+  transferQueueId: number;
 
   @Column
-  sendIdQueue: number;
+  timeToTransfer: number;
 
   @ForeignKey(() => Prompt)
   @Column
