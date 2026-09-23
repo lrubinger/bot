@@ -9,9 +9,12 @@ const store = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
 
   const whatsapp = await ShowWhatsAppService(whatsappId, companyId);
-  await StartWhatsAppSession(whatsapp, companyId);
 
-  return res.status(200).json({ message: "Starting session." });
+  // Start in background: the socket promise resolves only after WhatsApp connects.
+  // The HTTP request must return immediately so the frontend can poll the QR code.
+  void StartWhatsAppSession(whatsapp, companyId);
+
+  return res.status(202).json({ message: "Starting session.", status: "OPENING" });
 };
 
 const update = async (req: Request, res: Response): Promise<Response> => {
@@ -24,9 +27,11 @@ const update = async (req: Request, res: Response): Promise<Response> => {
     whatsappData: { session: "" }
   });
 
-  await StartWhatsAppSession(whatsapp, companyId);
+  // Start in background for the same reason as store(): QR generation happens
+  // before the socket promise resolves, so do not block the HTTP response.
+  void StartWhatsAppSession(whatsapp, companyId);
 
-  return res.status(200).json({ message: "Starting session." });
+  return res.status(202).json({ message: "Starting session.", status: "OPENING" });
 };
 
 const remove = async (req: Request, res: Response): Promise<Response> => {
