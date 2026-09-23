@@ -10,19 +10,26 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
-  <button type="button" id="themeToggleLogin" class="theme-toggle floating-theme" aria-label="Alternar tema">☀️</button>
   <div id="login" class="login-wrap">
-    <div class="login-shell">
-      <div class="login-brand">
-        <img src="./assets/logo.png" alt="PortoPlan" class="login-logo" />
-        <span>BOT</span>
+    <section class="login-hero">
+      <div class="hero-badge">CHATBOT PORTOPLAN</div>
+      <div class="hero-copy">
+        <span class="hero-accent"></span>
+        <h2>Automação inteligente para seu atendimento.</h2>
+        <p>Organize conversas, agilize processos e ofereça um atendimento mais eficiente com o Chatbot PortoPlan.</p>
       </div>
-      <div class="login-card">
-        <div class="login-card-head">
-          <div class="eyebrow">PORTOPLAN BOT</div>
-          <h1>Acesse sua conta</h1>
-          <p class="login-copy">Entre para gerenciar suas conexões e atendimentos.</p>
+    </section>
+    <section class="login-panel">
+      <div class="login-shell">
+        <div class="login-brand">
+          <img src="./assets/logo.png" alt="PortoPlan" class="login-logo" />
         </div>
+        <div class="login-card">
+          <div class="login-card-head">
+            <div class="eyebrow">CHATBOT PORTOPLAN</div>
+            <h1>Acesse sua conta</h1>
+            <p class="login-copy">Use seu e-mail e senha para acessar a plataforma de atendimento automatizado.</p>
+          </div>
         <form id="loginForm">
           <label>E-mail</label>
           <input id="email" type="email" autocomplete="username" required />
@@ -39,11 +46,13 @@
               </svg>
             </button>
           </div>
+          <div class="forgot-wrap"><button type="button" class="forgot-link">Esqueci a senha</button></div>
           <button type="submit" class="login-submit">Entrar</button>
         </form>
         <div id="loginError" class="error"></div>
       </div>
     </div>
+    </section>
   </div>
 
   <div id="app" class="app hidden">
@@ -58,12 +67,11 @@
     <main class="main">
       <header class="topbar">
         <div>
-          <div class="eyebrow">PortoPlan Bot</div>
+          <div class="eyebrow">CHATBOT PORTOPLAN</div>
           <h1 id="pageTitle">Dashboard</h1>
           <div class="muted" id="userLine"></div>
         </div>
         <div class="topbar-actions">
-          <button type="button" id="themeToggleApp" class="theme-toggle" aria-label="Alternar tema">☀️</button>
           <button id="logoutBtn" class="ghost">Sair</button>
         </div>
       </header>
