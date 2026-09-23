@@ -15,42 +15,57 @@ jobs:
     name: Atualizar Bot PortoPlan
     runs-on: ubuntu-latest
     environment: production
+
     steps:
       - name: Configurar conexão SSH
         shell: bash
         env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
         run: |
+          set -e
+          test -n "$DEPLOY_SSH_KEY_B64" || { echo "Secret DEPLOY_SSH_KEY_B64 nao configurado"; exit 1; }
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/portoplan_bot_deploy
+          printf '%s' "$DEPLOY_SSH_KEY_B64" | base64 -d > ~/.ssh/portoplan_bot_deploy
           chmod 600 ~/.ssh/portoplan_bot_deploy
+          ssh-keygen -y -f ~/.ssh/portoplan_bot_deploy >/dev/null
           ssh-keyscan -H 138.197.86.14 >> ~/.ssh/known_hosts
 
       - name: Implantar versão atual
         shell: bash
         run: |
-          ssh -i ~/.ssh/portoplan_bot_deploy \
-            -o IdentitiesOnly=yes \
-            -o ServerAliveInterval=30 \
-            root@138.197.86.14 \
-            'set -e
-             APP_DIR=/home/deploy/bot
-             test -d "$APP_DIR/.git" || { echo "Execute primeiro installer/install_primaria"; exit 1; }
-             test -f "$APP_DIR/backend/.env" || { echo "Arquivo backend/.env não configurado"; exit 1; }
-             test -f "$APP_DIR/frontend/.env" || { echo "Arquivo frontend/.env não configurado"; exit 1; }
-             sudo -u deploy -H bash -lc "
-               set -e
-               cd /home/deploy/bot
-               git pull --ff-only origin main
-               cd backend
-               npm install
-               npm run build
-               npm run db:migrate
-               pm2 restart bot-backend
-               cd ../frontend
-               npm install
-               npm run build
-               pm2 restart bot-frontend
-               pm2 save
-               pm2 status
-             "'
+          ssh -i ~/.ssh/portoplan_bot_deploy             -o IdentitiesOnly=yes             -o StrictHostKeyChecking=yes             -o ServerAliveInterval=30             root@138.197.86.14 'bash -s' <<'REMOTE'
+          set -euo pipefail
+
+          APP_DIR=/root/bot-teste
+          BRANCH=recuperacao-backend
+          WEB_DIR=/var/www/portoplan-bot
+
+          cd "$APP_DIR"
+          git reset --hard HEAD
+          git clean -fd -e backend/.env -e frontend/.env -e frontend/.env.local
+          git pull --ff-only origin "$BRANCH"
+
+          cd "$APP_DIR/backend"
+          npm install
+          npm run build
+          npm run db:migrate
+
+          pkill -f "$APP_DIR/backend/dist/server.js" >/dev/null 2>&1 || true
+          nohup node "$APP_DIR/backend/dist/server.js" > "$APP_DIR/backend-mvp.log" 2>&1 &
+          sleep 3
+
+          mkdir -p "$WEB_DIR"
+          rm -rf "$WEB_DIR"/*
+          cp -a "$APP_DIR/frontend-mvp/." "$WEB_DIR/"
+          chown -R www-data:www-data "$WEB_DIR"
+          find "$WEB_DIR" -type d -exec chmod 755 {} \;
+          find "$WEB_DIR" -type f -exec chmod 644 {} \;
+
+          nginx -t
+          systemctl reload nginx
+
+          curl -fsS http://127.0.0.1:4000/ >/dev/null || true
+          curl -fsS https://bot.portoplan.com.br/ >/dev/null
+
+          echo "DEPLOY_OK"
+          REMOTE
