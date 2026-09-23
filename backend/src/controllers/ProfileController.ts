@@ -39,7 +39,7 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
     attributes: publicAttributes,
     include: [
       { model: Company, as: "company", attributes: ["id", "name", "phone", "email"] },
-      { model: Whatsapp, as: "whatsapp", attributes: ["id", "name", "status", "number", "qrcode"] }
+      { model: Whatsapp, as: "whatsapp", attributes: ["id", "name", "status", "qrcode"] }
     ]
   });
 
@@ -101,7 +101,7 @@ export const connections = async (req: Request, res: Response): Promise<Response
 
   if (requester.super) {
     const items = await Whatsapp.findAll({
-      attributes: ["id", "name", "status", "number", "qrcode", "companyId"],
+      attributes: ["id", "name", "status", "qrcode", "companyId"],
       include: [{ model: Company, as: "company", attributes: ["id", "name"] }],
       order: [["companyId", "ASC"], ["name", "ASC"]]
     });
@@ -112,7 +112,7 @@ export const connections = async (req: Request, res: Response): Promise<Response
 
   const item = await Whatsapp.findOne({
     where: { id: requester.whatsappId, companyId: requester.companyId },
-    attributes: ["id", "name", "status", "number", "qrcode", "companyId"],
+    attributes: ["id", "name", "status", "qrcode", "companyId"],
     include: [{ model: Company, as: "company", attributes: ["id", "name"] }]
   });
 
