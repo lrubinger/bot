@@ -13,11 +13,12 @@ const activeItems = [
   ["contacts","Contatos","contacts"],
   ["queues","Filas","layers"],
   ["kanban","Kanban","columns"],
-  ["users","Usuários","users"]
+  ["users","Usuários","users"],
+  ["chat","Chat interno","bell"]
 ];
 const pendingItems = [
   ["Mensagens rápidas","bolt"],["Tarefas","check"],["Agendamentos","calendar"],["Tags","tag"],
-  ["Chat interno","messages"],["Ajuda","help"],["Campanhas","megaphone"],["Avisos","bell"],
+  ["Ajuda","help"],["Campanhas","megaphone"],["Avisos","bell"],
   ["Integrações","puzzle"],["Arquivos","folder"],["API externa","code"],["Financeiro","wallet"],
   ["Configurações avançadas","sliders"]
 ];
@@ -116,6 +117,7 @@ async function loadPage(){
     if(state.page==="tickets") return tickets();
     if(state.page==="kanban") return kanban();
     if(state.page==="users") return users();
+    if(state.page==="chat") return internalChat();
   }catch(err){ content(`<div class="card"><div class="error">${esc(err.message)}</div></div>`) }
 }
 
@@ -287,12 +289,150 @@ async function openTicket(id){
 }
 async function kanban(){
   setTitle("Kanban");
-  let ticketsData; try{ticketsData=await api('/ticket/kanban?pageNumber=1&showAll=true&queueIds=[]&tags=[]&users=[]')}catch(e){ticketsData=await api('/tickets?pageNumber=1&showAll=true&queueIds=[]&tags=[]&users=[]')}
-  const list=ticketsData.tickets||[];
-  const cols=["pending","open","closed"];
-  content(`<div class="kanban">${cols.map(s=>`<div class="kan-col"><h3>${s==="pending"?"Pendente":s==="open"?"Em atendimento":"Fechado"}</h3>${list.filter(t=>t.status===s).map(t=>`<div class="ticket-card"><b>${esc(t.contact?.name||"Contato")}</b><div class="small">${esc(t.lastMessage||"")}</div></div>`).join("")}</div>`).join("")}</div>`);
+
+  const storageKey=`pp_kanban_${state.user?.companyId||"default"}`;
+  const defaultColumns=[
+    {id:"new",title:"Novos"},
+    {id:"progress",title:"Em atendimento"},
+    {id:"done",title:"Concluídos"}
+  ];
+  let columns;
+  try{ columns=JSON.parse(localStorage.getItem(storageKey)||"null") || defaultColumns; }catch{ columns=defaultColumns; }
+
+  const save=()=>localStorage.setItem(storageKey,JSON.stringify(columns));
+
+  const render=()=>{
+    content(`
+      <div class="kanban-toolbar">
+        <button class="primary" id="addKanbanColumn">+ Novo quadro</button>
+        <span class="small">Arraste os quadros para reorganizar.</span>
+      </div>
+      <div class="kanban free-kanban" id="kanbanBoard">
+        ${columns.map(col=>`
+          <div class="kan-col draggable-col" draggable="true" data-col-id="${col.id}">
+            <div class="kan-col-head">
+              <h3>${esc(col.title)}</h3>
+              <button class="kan-menu" type="button" data-remove="${col.id}" title="Excluir quadro">⋮</button>
+            </div>
+            <button class="add-card-placeholder" type="button">+ Adicionar cartão</button>
+          </div>`).join("")}
+      </div>`);
+
+    $("#addKanbanColumn").onclick=()=>{
+      const title=prompt("Nome do novo quadro:");
+      if(!title?.trim())return;
+      columns.push({id:"c"+Date.now(),title:title.trim()});
+      save();render();
+    };
+
+    document.querySelectorAll("[data-remove]").forEach(btn=>btn.onclick=()=>{
+      const id=btn.dataset.remove;
+      if(columns.length<=1)return;
+      if(confirm("Excluir este quadro?")){columns=columns.filter(c=>c.id!==id);save();render();}
+    });
+
+    let dragging=null;
+    document.querySelectorAll(".draggable-col").forEach(col=>{
+      col.addEventListener("dragstart",()=>{dragging=col.dataset.colId;col.classList.add("dragging")});
+      col.addEventListener("dragend",()=>{dragging=null;col.classList.remove("dragging")});
+      col.addEventListener("dragover",e=>e.preventDefault());
+      col.addEventListener("drop",e=>{
+        e.preventDefault();
+        const target=col.dataset.colId;
+        if(!dragging||dragging===target)return;
+        const from=columns.findIndex(c=>c.id===dragging);
+        const to=columns.findIndex(c=>c.id===target);
+        const [moved]=columns.splice(from,1);
+        columns.splice(to,0,moved);
+        save();render();
+      });
+    });
+  };
+  render();
 }
 
+async function internalChat(){
+  setTitle("Chat interno");
+  let chats=[];
+  try{
+    const data=await api("/chats?pageNumber=1");
+    chats=data.records||[];
+  }catch(e){}
+
+  content(`
+    <div class="chat-layout">
+      <aside class="chat-list-panel">
+        <div class="chat-list-head">
+          <div><b>Conversas</b><div class="small">Somente usuários autorizados da sua empresa.</div></div>
+          <button class="primary" id="newChatBtn">+</button>
+        </div>
+        <div id="chatList">
+          ${chats.length?chats.map(c=>`
+            <button class="chat-list-item" data-chat-id="${c.id}">
+              <b>${esc(c.title||"Conversa")}</b>
+              <span>${esc(c.lastMessage||"Sem mensagens")}</span>
+            </button>`).join(""):'<div class="empty-state">Nenhuma conversa ainda.</div>'}
+        </div>
+      </aside>
+      <section class="chat-thread-panel" id="chatThread">
+        <div class="chat-empty">Selecione uma conversa ou inicie uma nova.</div>
+      </section>
+    </div>`);
+
+  $("#newChatBtn").onclick=()=>newInternalChat();
+  document.querySelectorAll(".chat-list-item").forEach(b=>b.onclick=()=>openInternalChat(b.dataset.chatId));
+}
+
+async function newInternalChat(){
+  try{
+    const data=await api("/users?pageNumber=1&searchParam=");
+    const users=(data.users||[]).filter(u=>String(u.id)!==String(state.user?.id));
+    if(!users.length){ alert("Nenhum usuário disponível para conversa."); return; }
+
+    modal(`
+      <h2>Nova conversa</h2>
+      <p>Escolha um usuário da sua empresa. Administradores PortoPlan podem conversar com todos.</p>
+      <label class="field-label">Título</label>
+      <input id="newChatTitle" class="settings-select" placeholder="Ex.: Suporte, Comercial, Operação" />
+      <div class="chat-user-picker">
+        ${users.map(u=>`<label><input type="radio" name="chatUser" value="${u.id}" /> <span>${esc(u.name)} · ${esc(u.email)}</span></label>`).join("")}
+      </div>
+      <button class="primary" id="createChatConfirm" type="button">Criar conversa</button>
+    `);
+
+    $("#createChatConfirm").onclick=async()=>{
+      const picked=document.querySelector('input[name="chatUser"]:checked');
+      if(!picked)return;
+      const user=users.find(u=>String(u.id)===String(picked.value));
+      const title=$("#newChatTitle").value.trim() || user.name;
+      await api("/chats",{method:"POST",body:JSON.stringify({title,users:[{id:user.id}]})});
+      closeModal();internalChat();
+    };
+  }catch(err){ alert(err.message); }
+}
+
+async function openInternalChat(id){
+  const thread=$("#chatThread");
+  thread.innerHTML='<div class="drawer-loading">Carregando conversa...</div>';
+  try{
+    const data=await api("/chats/"+id+"/messages?pageNumber=1");
+    const msgs=data.records||[];
+    thread.innerHTML=`
+      <div class="chat-thread-messages" id="internalMessages">
+        ${msgs.map(m=>`<div class="internal-msg ${String(m.senderId)===String(state.user?.id)?"me":""}"><b>${esc(m.sender?.name||"Usuário")}</b><span>${esc(m.message||"")}</span></div>`).join("")}
+      </div>
+      <div class="chat-thread-composer">
+        <textarea id="internalChatText" placeholder="Digite uma mensagem..."></textarea>
+        <button class="primary" id="internalChatSend">Enviar</button>
+      </div>`;
+    const box=$("#internalMessages");box.scrollTop=box.scrollHeight;
+    $("#internalChatSend").onclick=async()=>{
+      const message=$("#internalChatText").value.trim();if(!message)return;
+      await api("/chats/"+id+"/messages",{method:"POST",body:JSON.stringify({message})});
+      openInternalChat(id);
+    };
+  }catch(err){thread.innerHTML=`<div class="error">${esc(err.message)}</div>`;}
+}
 
 function applySidebarState(){
   document.body.classList.toggle("sidebar-collapsed",state.sidebarCollapsed);
@@ -320,6 +460,7 @@ function closeSettings(){
   $("#settingsBackdrop").classList.add("hidden");
 }
 $("#settingsBtn").onclick=openSettings;
+$("#chatBtn").onclick=()=>navigate("chat");
 $("#settingsClose").onclick=closeSettings;
 $("#settingsBackdrop").onclick=closeSettings;
 
@@ -327,10 +468,10 @@ async function loadSettings(selectedId){
   const box=$("#settingsContent");
   box.innerHTML='<div class="drawer-loading">Carregando configurações...</div>';
   try{
-    const users=await api("/profile/users");
+    const users=await api("/users/profile/list");
     const selected=String(selectedId || state.user?.id || users[0]?.id || "");
-    const profile=await api("/profile/users/"+selected);
-    const connections=await api("/profile/connections");
+    const profile=await api("/users/profile/"+selected);
+    const connections=await api("/whatsapp/profile/connections");
     const canChoose=users.length>1;
 
     box.innerHTML=`
@@ -391,7 +532,7 @@ async function loadSettings(selectedId){
 
     document.querySelectorAll(".settings-qr").forEach(b=>b.onclick=()=>showProfileQr(b.dataset.id));
     document.querySelectorAll(".settings-disconnect").forEach(b=>b.onclick=async()=>{
-      await api("/profile/connections/"+b.dataset.id+"/disconnect",{method:"DELETE"});
+      await api("/whatsapp/profile/connections/"+b.dataset.id+"/disconnect",{method:"DELETE"});
       loadSettings(selected);
     });
   }catch(err){
@@ -410,7 +551,7 @@ async function showProfileQr(id){
   `);
   let stopped=false,lastQr="",qrBornAt=0;
 
-  const start=async()=>{ await api("/profile/connections/"+id+"/start",{method:"POST"}); };
+  const start=async()=>{ await api("/whatsapp/profile/connections/"+id+"/start",{method:"POST"}); };
   const render=value=>{
     if(!value||value===lastQr)return;
     lastQr=value; const box=$("#qr"); box.innerHTML="";
@@ -425,7 +566,7 @@ async function showProfileQr(id){
   const poll=async()=>{
     if(stopped||$("#modal").classList.contains("hidden"))return;
     try{
-      const list=await api("/profile/connections");
+      const list=await api("/whatsapp/profile/connections");
       const w=list.find(x=>String(x.id)===String(id));
       if(w){
         render(w.qrcode);
