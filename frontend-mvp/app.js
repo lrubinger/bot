@@ -1,4 +1,4 @@
-const API = `${location.protocol}//${location.hostname}:4000`;
+const API = `${location.origin}/api`;
 const state = { token: localStorage.getItem("pp_token") || "", user: JSON.parse(localStorage.getItem("pp_user") || "null"), page: "dashboard" };
 
 const activeItems = [
