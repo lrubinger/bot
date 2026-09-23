@@ -132,7 +132,7 @@ async function dashboard(){
     <div class="card"><h3>Atendimentos</h3><b>${tk.length}</b><div class="small">abertos carregados</div></div>
     <div class="card"><h3>Contatos</h3><b>${ct.length}</b><div class="small">primeira página</div></div>
     <div class="card"><h3>Filas</h3><b>${qs.length}</b></div>
-    <div class="card"><h3>Demais módulos</h3><div class="status-warn">Pendentes</div></div>
+    <div class="card"><h3>Demais módulos</h3><div class="status-warn">Em Breve</div></div>
   </div>`);
 }
 
@@ -475,7 +475,6 @@ function closeSettings(){
   $("#settingsBackdrop").classList.add("hidden");
 }
 $("#settingsBtn").onclick=openSettings;
-$("#internalChatBtn").onclick=()=>navigate("internal-chat");
 $("#chatBtn").onclick=()=>navigate("chat");
 $("#settingsClose").onclick=closeSettings;
 $("#settingsBackdrop").onclick=closeSettings;
@@ -484,10 +483,10 @@ async function loadSettings(selectedId){
   const box=$("#settingsContent");
   box.innerHTML='<div class="drawer-loading">Carregando configurações...</div>';
   try{
-    const users=await api("/users/profile/list");
+    const users=await api("/profile/users");
     const selected=String(selectedId || state.user?.id || users[0]?.id || "");
-    const profile=await api("/users/profile/"+selected);
-    const connections=await api("/whatsapp/profile/connections");
+    const profile=await api("/profile/users/"+selected);
+    const connections=await api("/profile/connections");
     const canChoose=users.length>1;
 
     box.innerHTML=`
@@ -548,7 +547,7 @@ async function loadSettings(selectedId){
 
     document.querySelectorAll(".settings-qr").forEach(b=>b.onclick=()=>showProfileQr(b.dataset.id));
     document.querySelectorAll(".settings-disconnect").forEach(b=>b.onclick=async()=>{
-      await api("/whatsapp/profile/connections/"+b.dataset.id+"/disconnect",{method:"DELETE"});
+      await api("/profile/connections/"+b.dataset.id+"/disconnect",{method:"DELETE"});
       loadSettings(selected);
     });
   }catch(err){
@@ -567,7 +566,7 @@ async function showProfileQr(id){
   `);
   let stopped=false,lastQr="",qrBornAt=0;
 
-  const start=async()=>{ await api("/whatsapp/profile/connections/"+id+"/start",{method:"POST"}); };
+  const start=async()=>{ await api("/profile/connections/"+id+"/start",{method:"POST"}); };
   const render=value=>{
     if(!value||value===lastQr)return;
     lastQr=value; const box=$("#qr"); box.innerHTML="";
@@ -582,7 +581,7 @@ async function showProfileQr(id){
   const poll=async()=>{
     if(stopped||$("#modal").classList.contains("hidden"))return;
     try{
-      const list=await api("/whatsapp/profile/connections");
+      const list=await api("/profile/connections");
       const w=list.find(x=>String(x.id)===String(id));
       if(w){
         render(w.qrcode);
