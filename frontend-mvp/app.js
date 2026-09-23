@@ -117,6 +117,7 @@ async function loadPage(){
     if(state.page==="tickets") return tickets();
     if(state.page==="kanban") return kanban();
     if(state.page==="users") return users();
+    if(state.page==="internal-chat") return internalChat();
     if(state.page==="chat") return internalChat();
   }catch(err){ content(`<div class="card"><div class="error">${esc(err.message)}</div></div>`) }
 }
@@ -289,63 +290,111 @@ async function openTicket(id){
 }
 async function kanban(){
   setTitle("Kanban");
+  let board=await api("/company-kanban");
+  if(!board || !Array.isArray(board.columns)) board={columns:[]};
 
-  const storageKey=`pp_kanban_${state.user?.companyId||"default"}`;
-  const defaultColumns=[
-    {id:"new",title:"Novos"},
-    {id:"progress",title:"Em atendimento"},
-    {id:"done",title:"Concluídos"}
-  ];
-  let columns;
-  try{ columns=JSON.parse(localStorage.getItem(storageKey)||"null") || defaultColumns; }catch{ columns=defaultColumns; }
-
-  const save=()=>localStorage.setItem(storageKey,JSON.stringify(columns));
-
+  const save=async()=>api("/company-kanban",{method:"PUT",body:JSON.stringify(board)});
   const render=()=>{
     content(`
       <div class="kanban-toolbar">
-        <button class="primary" id="addKanbanColumn">+ Novo quadro</button>
-        <span class="small">Arraste os quadros para reorganizar.</span>
+        <button class="primary" id="addKanCol">+ Nova coluna</button>
+        <span class="small">Arraste cartões entre colunas e reorganize as colunas livremente.</span>
       </div>
-      <div class="kanban free-kanban" id="kanbanBoard">
-        ${columns.map(col=>`
-          <div class="kan-col draggable-col" draggable="true" data-col-id="${col.id}">
+      <div class="kanban kanban-free" id="kanbanBoard">
+        ${board.columns.map((col,ci)=>`
+          <section class="kan-col" draggable="true" data-col="${ci}">
             <div class="kan-col-head">
-              <h3>${esc(col.title)}</h3>
-              <button class="kan-menu" type="button" data-remove="${col.id}" title="Excluir quadro">⋮</button>
+              <h3 contenteditable="true" data-title="${ci}">${esc(col.title||"Sem título")}</h3>
+              <button class="kan-more" data-del-col="${ci}" title="Excluir coluna">×</button>
             </div>
-            <button class="add-card-placeholder" type="button">+ Adicionar cartão</button>
-          </div>`).join("")}
-      </div>`);
+            <div class="kan-cards" data-drop-col="${ci}">
+              ${(col.cards||[]).map((card,cardi)=>`
+                <article class="ticket-card kan-card" draggable="true" data-card="${cardi}" data-from="${ci}">
+                  <b>${esc(card.title||"Cartão")}</b>
+                  ${card.text?`<div class="small">${esc(card.text)}</div>`:""}
+                  <button class="kan-card-delete" data-del-card="${ci}:${cardi}" title="Excluir cartão">×</button>
+                </article>`).join("")}
+            </div>
+            <button class="kan-add-card" data-add-card="${ci}">+ Adicionar cartão</button>
+          </section>`).join("")}
+        <button class="kan-new-column" id="addKanColInline">+</button>
+      </div>
+    `);
 
-    $("#addKanbanColumn").onclick=()=>{
-      const title=prompt("Nome do novo quadro:");
-      if(!title?.trim())return;
-      columns.push({id:"c"+Date.now(),title:title.trim()});
-      save();render();
+    const addColumn=async()=>{
+      const title=prompt("Nome da nova coluna:","Nova coluna");
+      if(!title)return;
+      board.columns.push({id:"c"+Date.now(),title,cards:[]});
+      await save(); render();
     };
+    $("#addKanCol").onclick=addColumn;
+    $("#addKanColInline").onclick=addColumn;
 
-    document.querySelectorAll("[data-remove]").forEach(btn=>btn.onclick=()=>{
-      const id=btn.dataset.remove;
-      if(columns.length<=1)return;
-      if(confirm("Excluir este quadro?")){columns=columns.filter(c=>c.id!==id);save();render();}
+    document.querySelectorAll("[data-title]").forEach(el=>{
+      el.onblur=async()=>{
+        const i=+el.dataset.title;
+        board.columns[i].title=el.textContent.trim()||"Sem título";
+        await save();
+      };
+      el.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();el.blur();}};
     });
 
-    let dragging=null;
-    document.querySelectorAll(".draggable-col").forEach(col=>{
-      col.addEventListener("dragstart",()=>{dragging=col.dataset.colId;col.classList.add("dragging")});
-      col.addEventListener("dragend",()=>{dragging=null;col.classList.remove("dragging")});
-      col.addEventListener("dragover",e=>e.preventDefault());
-      col.addEventListener("drop",e=>{
-        e.preventDefault();
-        const target=col.dataset.colId;
-        if(!dragging||dragging===target)return;
-        const from=columns.findIndex(c=>c.id===dragging);
-        const to=columns.findIndex(c=>c.id===target);
-        const [moved]=columns.splice(from,1);
-        columns.splice(to,0,moved);
-        save();render();
-      });
+    document.querySelectorAll("[data-add-card]").forEach(btn=>btn.onclick=async()=>{
+      const ci=+btn.dataset.addCard;
+      const title=prompt("Título do cartão:");
+      if(!title)return;
+      const text=prompt("Descrição (opcional):","")||"";
+      board.columns[ci].cards=board.columns[ci].cards||[];
+      board.columns[ci].cards.push({id:"k"+Date.now(),title,text});
+      await save();render();
+    });
+
+    document.querySelectorAll("[data-del-col]").forEach(btn=>btn.onclick=async()=>{
+      const ci=+btn.dataset.delCol;
+      if(!confirm("Excluir esta coluna e seus cartões?"))return;
+      board.columns.splice(ci,1);await save();render();
+    });
+    document.querySelectorAll("[data-del-card]").forEach(btn=>btn.onclick=async()=>{
+      const [ci,cardi]=btn.dataset.delCard.split(":").map(Number);
+      board.columns[ci].cards.splice(cardi,1);await save();render();
+    });
+
+    let dragCard=null,dragCol=null;
+    document.querySelectorAll(".kan-card").forEach(card=>{
+      card.ondragstart=e=>{
+        dragCard={from:+card.dataset.from,index:+card.dataset.card};
+        dragCol=null;
+        e.dataTransfer.effectAllowed="move";
+        e.stopPropagation();
+      };
+    });
+    document.querySelectorAll(".kan-cards").forEach(zone=>{
+      zone.ondragover=e=>{e.preventDefault();zone.classList.add("drag-over")};
+      zone.ondragleave=()=>zone.classList.remove("drag-over");
+      zone.ondrop=async e=>{
+        e.preventDefault();e.stopPropagation();zone.classList.remove("drag-over");
+        if(!dragCard)return;
+        const to=+zone.dataset.dropCol;
+        const [item]=board.columns[dragCard.from].cards.splice(dragCard.index,1);
+        board.columns[to].cards=board.columns[to].cards||[];
+        board.columns[to].cards.push(item);
+        dragCard=null;await save();render();
+      };
+    });
+    document.querySelectorAll(".kan-col").forEach(col=>{
+      col.ondragstart=e=>{
+        if(e.target.closest(".kan-card")) return;
+        dragCol=+col.dataset.col;dragCard=null;e.dataTransfer.effectAllowed="move";
+      };
+      col.ondragover=e=>e.preventDefault();
+      col.ondrop=async e=>{
+        if(dragCol===null)return;
+        const to=+col.dataset.col;
+        if(to===dragCol)return;
+        const [item]=board.columns.splice(dragCol,1);
+        board.columns.splice(to,0,item);
+        dragCol=null;await save();render();
+      };
     });
   };
   render();
@@ -353,85 +402,51 @@ async function kanban(){
 
 async function internalChat(){
   setTitle("Chat interno");
-  let chats=[];
-  try{
-    const data=await api("/chats?pageNumber=1");
-    chats=data.records||[];
-  }catch(e){}
-
+  const users=await api("/internal-chat/contacts");
   content(`
-    <div class="chat-layout">
-      <aside class="chat-list-panel">
-        <div class="chat-list-head">
-          <div><b>Conversas</b><div class="small">Somente usuários autorizados da sua empresa.</div></div>
-          <button class="primary" id="newChatBtn">+</button>
+    <div class="internal-chat">
+      <aside class="chat-contacts">
+        <div class="chat-contacts-head">
+          <h3>Conversas</h3>
+          <span class="small">Sua empresa + PortoPlan</span>
         </div>
-        <div id="chatList">
-          ${chats.length?chats.map(c=>`
-            <button class="chat-list-item" data-chat-id="${c.id}">
-              <b>${esc(c.title||"Conversa")}</b>
-              <span>${esc(c.lastMessage||"Sem mensagens")}</span>
-            </button>`).join(""):'<div class="empty-state">Nenhuma conversa ainda.</div>'}
+        <div id="chatContactsList">
+          ${users.length?users.map(u=>`
+            <button class="chat-contact" data-chat-user="${u.id}">
+              <span class="chat-avatar">${esc((u.name||"?").slice(0,1).toUpperCase())}</span>
+              <span><b>${esc(u.name)}</b><small>${u.super?"PortoPlan • Administrador Master":esc(u.company?.name||u.email||"")}</small></span>
+            </button>`).join(""):'<div class="empty-state">Nenhum usuário disponível para conversa.</div>'}
         </div>
       </aside>
-      <section class="chat-thread-panel" id="chatThread">
-        <div class="chat-empty">Selecione uma conversa ou inicie uma nova.</div>
+      <section class="chat-thread" id="chatThread">
+        <div class="chat-empty"><b>Chat interno</b><span>Selecione um usuário para iniciar uma conversa.</span></div>
       </section>
     </div>`);
-
-  $("#newChatBtn").onclick=()=>newInternalChat();
-  document.querySelectorAll(".chat-list-item").forEach(b=>b.onclick=()=>openInternalChat(b.dataset.chatId));
+  document.querySelectorAll("[data-chat-user]").forEach(btn=>btn.onclick=()=>openInternalThread(btn.dataset.chatUser,btn));
 }
 
-async function newInternalChat(){
-  try{
-    const data=await api("/users?pageNumber=1&searchParam=");
-    const users=(data.users||[]).filter(u=>String(u.id)!==String(state.user?.id));
-    if(!users.length){ alert("Nenhum usuário disponível para conversa."); return; }
-
-    modal(`
-      <h2>Nova conversa</h2>
-      <p>Escolha um usuário da sua empresa. Administradores PortoPlan podem conversar com todos.</p>
-      <label class="field-label">Título</label>
-      <input id="newChatTitle" class="settings-select" placeholder="Ex.: Suporte, Comercial, Operação" />
-      <div class="chat-user-picker">
-        ${users.map(u=>`<label><input type="radio" name="chatUser" value="${u.id}" /> <span>${esc(u.name)} · ${esc(u.email)}</span></label>`).join("")}
-      </div>
-      <button class="primary" id="createChatConfirm" type="button">Criar conversa</button>
-    `);
-
-    $("#createChatConfirm").onclick=async()=>{
-      const picked=document.querySelector('input[name="chatUser"]:checked');
-      if(!picked)return;
-      const user=users.find(u=>String(u.id)===String(picked.value));
-      const title=$("#newChatTitle").value.trim() || user.name;
-      await api("/chats",{method:"POST",body:JSON.stringify({title,users:[{id:user.id}]})});
-      closeModal();internalChat();
-    };
-  }catch(err){ alert(err.message); }
-}
-
-async function openInternalChat(id){
+async function openInternalThread(userId,button){
+  document.querySelectorAll(".chat-contact").forEach(x=>x.classList.remove("active"));
+  button?.classList.add("active");
+  const name=button?.querySelector("b")?.textContent||"Conversa";
+  const data=await api("/internal-chat/messages/"+userId);
   const thread=$("#chatThread");
-  thread.innerHTML='<div class="drawer-loading">Carregando conversa...</div>';
-  try{
-    const data=await api("/chats/"+id+"/messages?pageNumber=1");
-    const msgs=data.records||[];
-    thread.innerHTML=`
-      <div class="chat-thread-messages" id="internalMessages">
-        ${msgs.map(m=>`<div class="internal-msg ${String(m.senderId)===String(state.user?.id)?"me":""}"><b>${esc(m.sender?.name||"Usuário")}</b><span>${esc(m.message||"")}</span></div>`).join("")}
-      </div>
-      <div class="chat-thread-composer">
-        <textarea id="internalChatText" placeholder="Digite uma mensagem..."></textarea>
-        <button class="primary" id="internalChatSend">Enviar</button>
-      </div>`;
-    const box=$("#internalMessages");box.scrollTop=box.scrollHeight;
-    $("#internalChatSend").onclick=async()=>{
-      const message=$("#internalChatText").value.trim();if(!message)return;
-      await api("/chats/"+id+"/messages",{method:"POST",body:JSON.stringify({message})});
-      openInternalChat(id);
-    };
-  }catch(err){thread.innerHTML=`<div class="error">${esc(err.message)}</div>`;}
+  thread.innerHTML=`
+    <div class="chat-thread-head"><b>${esc(name)}</b><span class="small">Chat interno PortoPlan</span></div>
+    <div class="chat-messages" id="internalMessages">
+      ${data.map(m=>`<div class="chat-bubble ${String(m.senderId)===String(state.user.id)?"me":""}">${esc(m.body)}<small>${new Date(m.createdAt).toLocaleString("pt-BR")}</small></div>`).join("")}
+    </div>
+    <form class="chat-compose" id="internalChatForm">
+      <textarea id="internalChatBody" placeholder="Digite uma mensagem..." required></textarea>
+      <button class="primary" type="submit">Enviar</button>
+    </form>`;
+  const box=$("#internalMessages");box.scrollTop=box.scrollHeight;
+  $("#internalChatForm").onsubmit=async e=>{
+    e.preventDefault();
+    const body=$("#internalChatBody").value.trim();if(!body)return;
+    await api("/internal-chat/messages/"+userId,{method:"POST",body:JSON.stringify({body})});
+    await openInternalThread(userId,button);
+  };
 }
 
 function applySidebarState(){
@@ -460,6 +475,7 @@ function closeSettings(){
   $("#settingsBackdrop").classList.add("hidden");
 }
 $("#settingsBtn").onclick=openSettings;
+$("#internalChatBtn").onclick=()=>navigate("internal-chat");
 $("#chatBtn").onclick=()=>navigate("chat");
 $("#settingsClose").onclick=closeSettings;
 $("#settingsBackdrop").onclick=closeSettings;
