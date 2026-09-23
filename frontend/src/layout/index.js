@@ -18,7 +18,7 @@ import ExitToAppIcon from "@material-ui/icons/ExitToApp";
 
 import MainListItems from "./MainListItems";
 import { AuthContext } from "../context/Auth/AuthContext";
-import logo from "../assets/logo.png";
+
 
 const drawerWidth = 250;
 
@@ -104,7 +104,7 @@ const LoggedInLayout = ({ children }) => {
         }}
       >
         <div className={classes.logoArea}>
-          {drawerOpen && <img src={logo} className={classes.logo} alt="PortoPlan Bot" />}
+          {drawerOpen && <Typography variant="subtitle1">PortoPlan Bot</Typography>}
           <IconButton onClick={() => setDrawerOpen(false)}>
             <ChevronLeftIcon />
           </IconButton>
