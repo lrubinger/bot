@@ -25,10 +25,21 @@ jobs:
           set -e
           test -n "$DEPLOY_SSH_KEY_B64" || { echo "Secret DEPLOY_SSH_KEY_B64 nao configurado"; exit 1; }
           install -m 700 -d ~/.ssh
-          CLEAN_KEY="$(printf '%s' "$DEPLOY_SSH_KEY_B64" | tr -d '\r\n\t ')"
-          printf '%s' "$CLEAN_KEY" | base64 -d > ~/.ssh/portoplan_bot_deploy
+          # Accept either a raw OpenSSH private key or a base64-encoded one.
+          if printf '%s' "$DEPLOY_SSH_KEY_B64" | grep -q -- '-----BEGIN .*PRIVATE KEY-----'; then
+            printf '%s\n' "$DEPLOY_SSH_KEY_B64" | tr -d '\r' > ~/.ssh/portoplan_bot_deploy
+          else
+            CLEAN_KEY="$(printf '%s' "$DEPLOY_SSH_KEY_B64" | tr -d '\r\n\t ')"
+            printf '%s' "$CLEAN_KEY" | base64 -d > ~/.ssh/portoplan_bot_deploy 2>/dev/null || {
+              echo "Secret DEPLOY_SSH_KEY_B64 nao e uma chave OpenSSH nem base64 valida."
+              exit 1
+            }
+          fi
           chmod 600 ~/.ssh/portoplan_bot_deploy
-          ssh-keygen -y -f ~/.ssh/portoplan_bot_deploy >/dev/null
+          ssh-keygen -y -f ~/.ssh/portoplan_bot_deploy >/dev/null || {
+            echo "A chave SSH decodificada e invalida."
+            exit 1
+          }
           ssh-keyscan -H 138.197.86.14 >> ~/.ssh/known_hosts
 
       - name: Implantar versão atual
