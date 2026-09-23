@@ -3,36 +3,51 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PortoPlan Bot - MVP</title>
+  <meta name="theme-color" content="#0a0a0a" />
+  <title>PortoPlan Bot</title>
+  <link rel="icon" type="image/png" href="./assets/favicon.png" />
   <link rel="stylesheet" href="./styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
   <div id="login" class="login-wrap">
-    <div class="login-card">
-      <div class="brand">PortoPlan Bot</div>
-      <div class="muted">Ambiente de teste</div>
-      <form id="loginForm">
-        <label>E-mail</label><input id="email" type="email" required />
-        <label>Senha</label>
-<div class="password-row">
-  <input id="password" type="password" required />
-  <button type="button" id="togglePassword" class="ghost small-btn">Mostrar</button>
-</div>
-        <button type="submit">Entrar</button>
-      </form>
-      <div id="loginError" class="error"></div>
+    <div class="login-shell">
+      <div class="login-brand">
+        <img src="./assets/logo.png" alt="PortoPlan" class="login-logo" />
+        <span>BOT</span>
+      </div>
+      <div class="login-card">
+        <div class="eyebrow">Acesso ao sistema</div>
+        <h1>Bem-vindo ao PortoPlan Bot</h1>
+        <p class="login-copy">Centralize conexões, atendimentos e operações do WhatsApp em um único ambiente.</p>
+        <form id="loginForm">
+          <label>E-mail</label>
+          <input id="email" type="email" autocomplete="username" required />
+          <label>Senha</label>
+          <div class="password-row">
+            <input id="password" type="password" autocomplete="current-password" required />
+            <button type="button" id="togglePassword" class="ghost small-btn">Mostrar</button>
+          </div>
+          <button type="submit" class="login-submit">Entrar</button>
+        </form>
+        <div id="loginError" class="error"></div>
+      </div>
     </div>
   </div>
 
   <div id="app" class="app hidden">
     <aside class="sidebar">
-      <div class="brand sidebrand">PortoPlan Bot</div>
+      <div class="sidebar-brand">
+        <img src="./assets/logo.png" alt="PortoPlan" class="sidebar-logo" />
+        <div class="product-chip">BOT</div>
+      </div>
       <nav id="menu"></nav>
+      <div class="sidebar-footer">PortoPlan • Ambiente de teste</div>
     </aside>
     <main class="main">
-      <header>
+      <header class="topbar">
         <div>
+          <div class="eyebrow">PortoPlan Bot</div>
           <h1 id="pageTitle">Dashboard</h1>
           <div class="muted" id="userLine"></div>
         </div>
@@ -42,7 +57,12 @@
     </main>
   </div>
 
-  <div id="modal" class="modal hidden"><div class="modal-card"><button id="modalClose" class="modal-close">×</button><div id="modalBody"></div></div></div>
+  <div id="modal" class="modal hidden">
+    <div class="modal-card">
+      <button id="modalClose" class="modal-close">×</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
   <script src="./app.js"></script>
 </body>
 </html>
