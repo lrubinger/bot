@@ -2,8 +2,7 @@ const API = `${location.origin}/api`;
 const state = {
   token: localStorage.getItem("pp_token") || "",
   user: JSON.parse(localStorage.getItem("pp_user") || "null"),
-  page: "dashboard",
-  theme: localStorage.getItem("pp_theme") || "dark"
+  page: "dashboard"
 };
 
 const activeItems = [
@@ -14,22 +13,6 @@ const pendingItems = ["Mensagens rápidas","Tarefas","Agendamentos","Tags","Chat
 
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-
-function applyTheme(theme){
-  state.theme = theme === "light" ? "light" : "dark";
-  document.documentElement.dataset.theme = state.theme;
-  localStorage.setItem("pp_theme", state.theme);
-  const icon = state.theme === "dark" ? "☀️" : "🌙";
-  const title = state.theme === "dark" ? "Usar modo claro" : "Usar modo escuro";
-  ["themeToggleLogin","themeToggleApp"].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el){ el.textContent=icon; el.title=title; }
-  });
-}
-function toggleTheme(){ applyTheme(state.theme === "dark" ? "light" : "dark"); }
-applyTheme(state.theme);
-document.getElementById("themeToggleLogin")?.addEventListener("click",toggleTheme);
-document.getElementById("themeToggleApp")?.addEventListener("click",toggleTheme);
 
 async function api(path, options={}) {
   const headers = { ...(options.headers||{}) };
