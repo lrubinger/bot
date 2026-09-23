@@ -25,7 +25,8 @@ jobs:
           set -e
           test -n "$DEPLOY_SSH_KEY_B64" || { echo "Secret DEPLOY_SSH_KEY_B64 nao configurado"; exit 1; }
           install -m 700 -d ~/.ssh
-          printf '%s' "$DEPLOY_SSH_KEY_B64" | base64 -d > ~/.ssh/portoplan_bot_deploy
+          CLEAN_KEY="$(printf '%s' "$DEPLOY_SSH_KEY_B64" | tr -d '\r\n\t ')"
+          printf '%s' "$CLEAN_KEY" | base64 -d > ~/.ssh/portoplan_bot_deploy
           chmod 600 ~/.ssh/portoplan_bot_deploy
           ssh-keygen -y -f ~/.ssh/portoplan_bot_deploy >/dev/null
           ssh-keyscan -H 138.197.86.14 >> ~/.ssh/known_hosts
