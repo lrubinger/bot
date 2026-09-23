@@ -10,6 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
+  <button type="button" id="themeToggleLogin" class="theme-toggle floating-theme" aria-label="Alternar tema">☀️</button>
   <div id="login" class="login-wrap">
     <div class="login-shell">
       <div class="login-brand">
@@ -51,7 +52,10 @@
           <h1 id="pageTitle">Dashboard</h1>
           <div class="muted" id="userLine"></div>
         </div>
-        <button id="logoutBtn" class="ghost">Sair</button>
+        <div class="topbar-actions">
+          <button type="button" id="themeToggleApp" class="theme-toggle" aria-label="Alternar tema">☀️</button>
+          <button id="logoutBtn" class="ghost">Sair</button>
+        </div>
       </header>
       <section id="content"></section>
     </main>
