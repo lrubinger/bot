@@ -111,6 +111,15 @@ class Whatsapp extends Model<Whatsapp> {
   @Column
   timeToTransfer: number;
 
+  // Legacy queue-routing settings used by queues.ts.
+  // These columns already belong to the original Whaticket schema; declaring
+  // them here restores the model contract required by the queue worker.
+  @Column
+  timeSendQueue: number;
+
+  @Column
+  sendIdQueue: number;
+
   @ForeignKey(() => Prompt)
   @Column
   promptId: number;
