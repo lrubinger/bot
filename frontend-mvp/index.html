@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PortoPlan Bot - MVP</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+  <div id="login" class="login-wrap">
+    <div class="login-card">
+      <div class="brand">PortoPlan Bot</div>
+      <div class="muted">Ambiente de teste</div>
+      <form id="loginForm">
+        <label>E-mail</label><input id="email" type="email" required />
+        <label>Senha</label><input id="password" type="password" required />
+        <button type="submit">Entrar</button>
+      </form>
+      <div id="loginError" class="error"></div>
+    </div>
+  </div>
+
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand sidebrand">PortoPlan Bot</div>
+      <nav id="menu"></nav>
+    </aside>
+    <main class="main">
+      <header>
+        <div>
+          <h1 id="pageTitle">Dashboard</h1>
+          <div class="muted" id="userLine"></div>
+        </div>
+        <button id="logoutBtn" class="ghost">Sair</button>
+      </header>
+      <section id="content"></section>
+    </main>
+  </div>
+
+  <div id="modal" class="modal hidden"><div class="modal-card"><button id="modalClose" class="modal-close">×</button><div id="modalBody"></div></div></div>
+  <script src="./app.js"></script>
+</body>
+</html>
