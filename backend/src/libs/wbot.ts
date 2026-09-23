@@ -187,6 +187,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             }
 
             if (connection === "open") {
+              retriesQrCodeMap.delete(id);
               await whatsapp.update({
                 status: "CONNECTED",
                 qrcode: "",
@@ -210,7 +211,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             }
 
             if (qr !== undefined) {
-              if (retriesQrCodeMap.get(id) && retriesQrCodeMap.get(id) >= 3) {
+              if (retriesQrCodeMap.get(id) && retriesQrCodeMap.get(id) >= 10) {
                 await whatsappUpdate.update({
                   status: "DISCONNECTED",
                   qrcode: ""
