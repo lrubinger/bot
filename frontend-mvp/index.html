@@ -14,7 +14,11 @@
       <div class="muted">Ambiente de teste</div>
       <form id="loginForm">
         <label>E-mail</label><input id="email" type="email" required />
-        <label>Senha</label><input id="password" type="password" required />
+        <label>Senha</label>
+<div class="password-row">
+  <input id="password" type="password" required />
+  <button type="button" id="togglePassword" class="ghost small-btn">Mostrar</button>
+</div>
         <button type="submit">Entrar</button>
       </form>
       <div id="loginError" class="error"></div>
