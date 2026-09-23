@@ -1,5 +1,10 @@
 const API = `${location.origin}/api`;
-const state = { token: localStorage.getItem("pp_token") || "", user: JSON.parse(localStorage.getItem("pp_user") || "null"), page: "dashboard" };
+const state = {
+  token: localStorage.getItem("pp_token") || "",
+  user: JSON.parse(localStorage.getItem("pp_user") || "null"),
+  page: "dashboard",
+  theme: localStorage.getItem("pp_theme") || "dark"
+};
 
 const activeItems = [
   ["dashboard","Dashboard"],["connections","Conexões WhatsApp"],["tickets","Atendimentos"],
@@ -9,6 +14,22 @@ const pendingItems = ["Mensagens rápidas","Tarefas","Agendamentos","Tags","Chat
 
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+function applyTheme(theme){
+  state.theme = theme === "light" ? "light" : "dark";
+  document.documentElement.dataset.theme = state.theme;
+  localStorage.setItem("pp_theme", state.theme);
+  const icon = state.theme === "dark" ? "☀️" : "🌙";
+  const title = state.theme === "dark" ? "Usar modo claro" : "Usar modo escuro";
+  ["themeToggleLogin","themeToggleApp"].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){ el.textContent=icon; el.title=title; }
+  });
+}
+function toggleTheme(){ applyTheme(state.theme === "dark" ? "light" : "dark"); }
+applyTheme(state.theme);
+document.getElementById("themeToggleLogin")?.addEventListener("click",toggleTheme);
+document.getElementById("themeToggleApp")?.addEventListener("click",toggleTheme);
 
 async function api(path, options={}) {
   const headers = { ...(options.headers||{}) };
@@ -98,54 +119,117 @@ async function connections(){
   document.querySelectorAll(".qr").forEach(b=>b.onclick=()=>showQr(b.dataset.id));
 }
 async function showQr(id){
-  modal('<h2>Conectar WhatsApp</h2><p>Abra o WhatsApp, vá em <b>Aparelhos conectados</b> e escaneie o código.</p><div id="qrStatus" class="muted">Iniciando sessão...</div><div id="qr" class="qr-box"><div class="qr-loading"></div></div>');
+  modal(`
+    <div class="qr-modal-head">
+      <div>
+        <div class="eyebrow">Conexão WhatsApp</div>
+        <h2>Conectar meu WhatsApp</h2>
+      </div>
+    </div>
+    <p class="qr-instructions">
+      No celular, abra o WhatsApp e acesse <b>Aparelhos conectados</b> → <b>Conectar um aparelho</b>.
+      Depois, escaneie o QR Code abaixo.
+    </p>
+    <div id="qrStatus" class="qr-status">Iniciando sessão...</div>
+    <div id="qr" class="qr-box"><div class="qr-loading"></div></div>
+    <div class="qr-meta">
+      <span id="qrHint">Aguardando o primeiro QR Code...</span>
+      <span id="qrCountdown"></span>
+    </div>
+    <button id="qrRestart" class="ghost qr-restart" type="button">Gerar novo QR Code</button>
+  `);
 
-  try{
-    await api("/whatsappsession/"+id,{method:"POST"});
-  }catch(e){
-    const status=$("#qrStatus");
-    if(status) status.textContent="Sessão iniciada. Aguardando QR Code...";
-  }
-
-  let tries=0;
+  let stopped=false;
   let lastQr="";
+  let qrBornAt=0;
+  let tries=0;
+
+  const setStatus=(msg,type="")=>{
+    const el=$("#qrStatus");
+    if(!el) return;
+    el.textContent=msg;
+    el.className="qr-status"+(type?(" "+type):"");
+  };
+
+  const renderQr=(value)=>{
+    const box=$("#qr");
+    if(!box || !value) return;
+    box.innerHTML="";
+    if(typeof QRCode!=="function"){
+      box.innerHTML='<div class="error">Gerador visual de QR Code indisponível.</div>';
+      return;
+    }
+    new QRCode(box,{text:value,width:300,height:300,correctLevel:QRCode.CorrectLevel.M});
+    qrBornAt=Date.now();
+    $("#qrHint").textContent="Por segurança, o QR Code é renovado automaticamente.";
+  };
+
+  const startSession=async(force=false)=>{
+    setStatus(force?"Gerando um novo QR Code...":"Iniciando sessão...");
+    try{
+      await api("/whatsappsession/"+id,{method:force?"PUT":"POST"});
+    }catch(e){
+      setStatus("Aguardando o QR Code do WhatsApp...");
+    }
+  };
+
+  $("#qrRestart").onclick=async()=>{
+    lastQr="";
+    qrBornAt=0;
+    const box=$("#qr"); if(box) box.innerHTML='<div class="qr-loading"></div>';
+    await startSession(true);
+  };
+
+  await startSession(false);
+
   const poll=async()=>{
-    if($("#modal").classList.contains("hidden")) return;
+    if(stopped || $("#modal").classList.contains("hidden")) return;
     try{
       const w=await api("/whatsapp/"+id+"?session=0");
-      const status=(w.status||"aguardando").toUpperCase();
-      $("#qrStatus").textContent = status==="QRCODE" ? "QR Code pronto para leitura." : "Status: "+status;
+      const status=String(w.status||"aguardando").toUpperCase();
 
       if(w.qrcode && w.qrcode!==lastQr){
         lastQr=w.qrcode;
-        const box=$("#qr");
-        box.innerHTML="";
-        if(typeof QRCode==="function"){
-          new QRCode(box,{text:w.qrcode,width:256,height:256,correctLevel:QRCode.CorrectLevel.M});
-        }else{
-          box.innerHTML='<div class="error">Não foi possível carregar o gerador visual do QR Code.</div>';
-        }
+        renderQr(w.qrcode);
+        setStatus("QR Code pronto para leitura.","ready");
+      }else if(status==="OPENING" || status==="QRCODE"){
+        setStatus(lastQr?"QR Code pronto para leitura.":"Preparando QR Code...");
       }
 
       if(status==="CONNECTED"){
-        $("#qrStatus").textContent="WhatsApp conectado com sucesso.";
-        setTimeout(()=>{ closeModal(); connections(); },900);
+        stopped=true;
+        setStatus("WhatsApp conectado com sucesso.","connected");
+        $("#qrHint").textContent="Conexão concluída.";
+        $("#qrCountdown").textContent="";
+        setTimeout(()=>{ closeModal(); connections(); },1200);
         return;
       }
 
-      if(status==="DISCONNECTED" && tries>2){
-        $("#qrStatus").textContent="Sessão desconectada. Clique em Reiniciar para gerar um novo QR Code.";
-        return;
+      if(status==="DISCONNECTED"){
+        setStatus("Sessão desconectada. Gere um novo QR Code.","warning");
       }
     }catch(e){
-      $("#qrStatus").textContent=e.message;
+      setStatus(e.message||"Falha ao consultar a conexão.","warning");
     }
 
     tries++;
-    if(tries<120) setTimeout(poll,1500);
-    else $("#qrStatus").textContent="Tempo de espera esgotado. Reinicie a conexão para tentar novamente.";
+    if(tries<240) setTimeout(poll,1000);
+    else setStatus("Tempo de espera esgotado. Gere um novo QR Code.","warning");
   };
-  setTimeout(poll,600);
+
+  const countdown=setInterval(()=>{
+    if(stopped || $("#modal").classList.contains("hidden")){
+      clearInterval(countdown); return;
+    }
+    const el=$("#qrCountdown");
+    if(!el) return;
+    if(!qrBornAt){ el.textContent=""; return; }
+    const elapsed=Math.floor((Date.now()-qrBornAt)/1000);
+    const left=Math.max(0,30-(elapsed%30));
+    el.textContent=`Atualização em ~${left}s`;
+  },1000);
+
+  setTimeout(poll,350);
 }
 async function contacts(){
   setTitle("Contatos"); const data=await api("/contacts?pageNumber=1&searchParam=");
