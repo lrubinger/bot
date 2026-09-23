@@ -2,14 +2,51 @@ const API = `${location.origin}/api`;
 const state = {
   token: localStorage.getItem("pp_token") || "",
   user: JSON.parse(localStorage.getItem("pp_user") || "null"),
-  page: "dashboard"
+  page: "dashboard",
+  sidebarCollapsed: localStorage.getItem("pp_sidebar_collapsed") === "1"
 };
 
 const activeItems = [
-  ["dashboard","Dashboard"],["connections","Conexões WhatsApp"],["tickets","Atendimentos"],
-  ["contacts","Contatos"],["queues","Filas"],["kanban","Kanban"],["users","Usuários"]
+  ["dashboard","Dashboard","dashboard"],
+  ["connections","Conexões WhatsApp","link"],
+  ["tickets","Atendimentos","chat"],
+  ["contacts","Contatos","contacts"],
+  ["queues","Filas","layers"],
+  ["kanban","Kanban","columns"],
+  ["users","Usuários","users"]
 ];
-const pendingItems = ["Mensagens rápidas","Tarefas","Agendamentos","Tags","Chat interno","Ajuda","Campanhas","Avisos","Integrações","Arquivos","API externa","Financeiro","Configurações avançadas"];
+const pendingItems = [
+  ["Mensagens rápidas","bolt"],["Tarefas","check"],["Agendamentos","calendar"],["Tags","tag"],
+  ["Chat interno","messages"],["Ajuda","help"],["Campanhas","megaphone"],["Avisos","bell"],
+  ["Integrações","puzzle"],["Arquivos","folder"],["API externa","code"],["Financeiro","wallet"],
+  ["Configurações avançadas","sliders"]
+];
+
+function menuIcon(name){
+  const paths={
+    dashboard:'<path d="M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z"/>',
+    link:'<path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1"/>',
+    chat:'<path d="M4 5h16v11H9l-5 4V5Zm4 4h8M8 12h5"/>',
+    contacts:'<path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8-1a2.5 2.5 0 1 0 0-5M3 19a5 5 0 0 1 10 0M14 14a4 4 0 0 1 7 3"/>',
+    layers:'<path d="m12 3 9 5-9 5-9-5 9-5Zm-9 10 9 5 9-5M3 17l9 5 9-5"/>',
+    columns:'<path d="M4 4h5v16H4V4Zm11 0h5v10h-5V4Zm0 14h5v2h-5v-2Z"/>',
+    users:'<path d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm7-1a3 3 0 1 0 0-6M3 20a6 6 0 0 1 12 0M14 14a5 5 0 0 1 7 4.5"/>',
+    bolt:'<path d="m13 2-7 11h6l-1 9 7-12h-6l1-8Z"/>',
+    check:'<path d="M4 12l5 5L20 6"/>',
+    calendar:'<path d="M5 4h14v16H5V4Zm0 5h14M8 2v4M16 2v4"/>',
+    tag:'<path d="M3 12V5h7l10 10-7 7L3 12Zm5-4h.01"/>',
+    messages:'<path d="M4 5h12v9H9l-5 4V5Zm7 2h9v9l-3-2"/>',
+    help:'<path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm-2-12a2.4 2.4 0 1 1 3 2.3c-.7.2-1 .8-1 1.7v.5M12 17h.01"/>',
+    megaphone:'<path d="M4 10v4h4l8 4V6l-8 4H4Zm4 4 1 5h3l-1-4"/>',
+    bell:'<path d="M6 9a6 6 0 0 1 12 0v5l2 2H4l2-2V9Zm4 9h4"/>',
+    puzzle:'<path d="M4 4h6a2 2 0 1 0 4 0h6v6a2 2 0 1 1 0 4v6h-6a2 2 0 1 0-4 0H4v-6a2 2 0 1 1 0-4V4Z"/>',
+    folder:'<path d="M3 6h7l2 2h9v11H3V6Z"/>',
+    code:'<path d="m8 8-4 4 4 4m8-8 4 4-4 4m-2-10-4 12"/>',
+    wallet:'<path d="M4 6h15v13H4V6Zm0 3h15m-4 4h6v4h-6v-4Z"/>',
+    sliders:'<path d="M4 6h7m4 0h5M11 4v4M4 12h3m4 0h9M7 10v4M4 18h10m4 0h2m-6-2v4"/>'
+  };
+  return `<svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths[name]||paths.dashboard}</svg>`;
+}
 
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -54,9 +91,9 @@ $("#loginForm").onsubmit = async e => {
 
 function renderMenu(){
   $("#menu").innerHTML = '<div class="menu-title">MVP em teste</div>' +
-    activeItems.map(([id,label])=>`<div class="menu-item ${state.page===id?"active":""}" data-page="${id}"><span>${label}</span></div>`).join("") +
+    activeItems.map(([id,label,icon])=>`<div class="menu-item ${state.page===id?"active":""}" data-page="${id}" title="${label}">${menuIcon(icon)}<span class="menu-label">${label}</span></div>`).join("") +
     '<div class="menu-title">Próximas etapas</div>' +
-    pendingItems.map(x=>`<div class="menu-item pending"><span>${x}</span><span class="badge">Pendente</span></div>`).join("");
+    pendingItems.map(([label,icon])=>`<div class="menu-item pending" title="${label}">${menuIcon(icon)}<span class="menu-label">${label}</span><span class="badge">Em Breve</span></div>`).join("");
   document.querySelectorAll("[data-page]").forEach(el=>el.onclick=()=>navigate(el.dataset.page));
 }
 function navigate(page){state.page=page;renderMenu();loadPage();}
@@ -256,5 +293,162 @@ async function kanban(){
   content(`<div class="kanban">${cols.map(s=>`<div class="kan-col"><h3>${s==="pending"?"Pendente":s==="open"?"Em atendimento":"Fechado"}</h3>${list.filter(t=>t.status===s).map(t=>`<div class="ticket-card"><b>${esc(t.contact?.name||"Contato")}</b><div class="small">${esc(t.lastMessage||"")}</div></div>`).join("")}</div>`).join("")}</div>`);
 }
 
-function initApp(){ $("#userLine").textContent = state.user ? `${state.user.name||""} · ${state.user.email||""}` : ""; renderMenu(); loadPage(); }
+
+function applySidebarState(){
+  document.body.classList.toggle("sidebar-collapsed",state.sidebarCollapsed);
+  const btn=$("#sidebarToggle");
+  if(btn){
+    btn.title=state.sidebarCollapsed?"Expandir menu":"Reduzir menu";
+    btn.setAttribute("aria-label",btn.title);
+  }
+}
+$("#sidebarToggle").onclick=()=>{
+  state.sidebarCollapsed=!state.sidebarCollapsed;
+  localStorage.setItem("pp_sidebar_collapsed",state.sidebarCollapsed?"1":"0");
+  applySidebarState();
+};
+
+function openSettings(){
+  $("#settingsDrawer").classList.add("open");
+  $("#settingsDrawer").setAttribute("aria-hidden","false");
+  $("#settingsBackdrop").classList.remove("hidden");
+  loadSettings();
+}
+function closeSettings(){
+  $("#settingsDrawer").classList.remove("open");
+  $("#settingsDrawer").setAttribute("aria-hidden","true");
+  $("#settingsBackdrop").classList.add("hidden");
+}
+$("#settingsBtn").onclick=openSettings;
+$("#settingsClose").onclick=closeSettings;
+$("#settingsBackdrop").onclick=closeSettings;
+
+async function loadSettings(selectedId){
+  const box=$("#settingsContent");
+  box.innerHTML='<div class="drawer-loading">Carregando configurações...</div>';
+  try{
+    const users=await api("/profile/users");
+    const selected=String(selectedId || state.user?.id || users[0]?.id || "");
+    const profile=await api("/profile/users/"+selected);
+    const connections=await api("/profile/connections");
+    const canChoose=users.length>1;
+
+    box.innerHTML=`
+      ${canChoose?`<div class="settings-section"><label class="field-label">Usuário</label><select id="settingsUserSelect" class="settings-select">${users.map(u=>`<option value="${u.id}" ${String(u.id)===selected?"selected":""}>${esc(u.name)} · ${esc(u.company?.name||"")}</option>`).join("")}</select></div>`:""}
+      <form id="profileForm">
+        <div class="settings-section">
+          <h3>Dados do usuário</h3>
+          <div class="settings-grid">
+            <label><span>Nome</span><input id="profileName" value="${esc(profile.name||"")}" /></label>
+            <label><span>E-mail</span><input id="profileEmail" type="email" value="${esc(profile.email||"")}" /></label>
+            <label><span>Telefone</span><input id="profilePhone" value="${esc(profile.phone||"")}" /></label>
+            <label class="full"><span>Endereço</span><input id="profileAddress" value="${esc(profile.address||"")}" /></label>
+            <label class="full"><span>Nova senha</span><input id="profilePassword" type="password" placeholder="Preencha apenas para alterar" /></label>
+          </div>
+          <div class="settings-actions"><button class="primary" type="submit">Salvar alterações</button><span id="profileSaveStatus" class="small"></span></div>
+        </div>
+      </form>
+      <div class="settings-section">
+        <h3>Conexão WhatsApp</h3>
+        <p class="settings-help">${canChoose?"Como administrador PortoPlan, você visualiza todas as conexões.":"Aqui aparece somente a conexão vinculada ao seu usuário."}</p>
+        <div class="settings-connections">
+          ${connections.length?connections.map(w=>`
+            <div class="connection-card">
+              <div>
+                <b>${esc(w.name||"WhatsApp")}</b>
+                <span>${esc(w.company?.name||"")}</span>
+              </div>
+              <span class="connection-status ${String(w.status||"").toLowerCase()}">${esc(w.status||"DISCONNECTED")}</span>
+              <div class="connection-actions">
+                <button class="ghost settings-qr" data-id="${w.id}" type="button">QR Code</button>
+                <button class="ghost settings-disconnect" data-id="${w.id}" type="button">Desconectar</button>
+              </div>
+            </div>`).join(""):'<div class="empty-state">Nenhuma conexão vinculada a este usuário.</div>'}
+        </div>
+      </div>
+    `;
+
+    $("#settingsUserSelect")?.addEventListener("change",e=>loadSettings(e.target.value));
+    $("#profileForm").onsubmit=async e=>{
+      e.preventDefault();
+      const payload={
+        name:$("#profileName").value.trim(),
+        email:$("#profileEmail").value.trim(),
+        phone:$("#profilePhone").value.trim(),
+        address:$("#profileAddress").value.trim()
+      };
+      const password=$("#profilePassword").value;
+      if(password) payload.password=password;
+      await api("/profile/users/"+selected,{method:"PUT",body:JSON.stringify(payload)});
+      $("#profileSaveStatus").textContent="Dados salvos.";
+      if(String(state.user?.id)===selected){
+        state.user={...state.user,...payload};
+        delete state.user.password;
+        localStorage.setItem("pp_user",JSON.stringify(state.user));
+        $("#userLine").textContent=`${state.user.name||""} · ${state.user.email||""}`;
+      }
+    };
+
+    document.querySelectorAll(".settings-qr").forEach(b=>b.onclick=()=>showProfileQr(b.dataset.id));
+    document.querySelectorAll(".settings-disconnect").forEach(b=>b.onclick=async()=>{
+      await api("/profile/connections/"+b.dataset.id+"/disconnect",{method:"DELETE"});
+      loadSettings(selected);
+    });
+  }catch(err){
+    box.innerHTML=`<div class="error">${esc(err.message)}</div>`;
+  }
+}
+
+async function showProfileQr(id){
+  modal(`
+    <div class="qr-modal-head"><div class="eyebrow">CONEXÃO WHATSAPP</div><h2>Conectar meu WhatsApp</h2></div>
+    <p class="qr-instructions">No celular, abra o WhatsApp e acesse <b>Aparelhos conectados</b> → <b>Conectar um aparelho</b>. Depois, escaneie o QR Code abaixo.</p>
+    <div id="qrStatus" class="qr-status">Iniciando sessão...</div>
+    <div id="qr" class="qr-box"><div class="qr-loading"></div></div>
+    <div class="qr-meta"><span id="qrHint">Aguardando o primeiro QR Code...</span><span id="qrCountdown"></span></div>
+    <button id="qrRestart" class="ghost qr-restart" type="button">Gerar novo QR Code</button>
+  `);
+  let stopped=false,lastQr="",qrBornAt=0;
+
+  const start=async()=>{ await api("/profile/connections/"+id+"/start",{method:"POST"}); };
+  const render=value=>{
+    if(!value||value===lastQr)return;
+    lastQr=value; const box=$("#qr"); box.innerHTML="";
+    new QRCode(box,{text:value,width:300,height:300,correctLevel:QRCode.CorrectLevel.M});
+    qrBornAt=Date.now(); $("#qrStatus").textContent="QR Code pronto para leitura.";
+    $("#qrHint").textContent="Por segurança, o QR Code é renovado automaticamente.";
+  };
+
+  $("#qrRestart").onclick=async()=>{lastQr="";qrBornAt=0;$("#qr").innerHTML='<div class="qr-loading"></div>';await start();};
+  try{await start();}catch(e){$("#qrStatus").textContent=e.message;}
+
+  const poll=async()=>{
+    if(stopped||$("#modal").classList.contains("hidden"))return;
+    try{
+      const list=await api("/profile/connections");
+      const w=list.find(x=>String(x.id)===String(id));
+      if(w){
+        render(w.qrcode);
+        const status=String(w.status||"").toUpperCase();
+        if(status==="CONNECTED"){
+          stopped=true;$("#qrStatus").textContent="WhatsApp conectado com sucesso.";
+          setTimeout(()=>{closeModal();loadSettings();},1000);return;
+        }
+      }
+    }catch(e){$("#qrStatus").textContent=e.message;}
+    setTimeout(poll,1000);
+  };
+  const timer=setInterval(()=>{
+    if(stopped||$("#modal").classList.contains("hidden")){clearInterval(timer);return;}
+    if(qrBornAt){const left=Math.max(0,30-(Math.floor((Date.now()-qrBornAt)/1000)%30));$("#qrCountdown").textContent=`Atualização em ~${left}s`;}
+  },1000);
+  setTimeout(poll,350);
+}
+
+function initApp(){
+  $("#userLine").textContent = state.user ? `${state.user.name||""} · ${state.user.email||""}` : "";
+  applySidebarState();
+  renderMenu();
+  loadPage();
+}
 if(state.token){loginView(false);initApp()} else loginView(true);
