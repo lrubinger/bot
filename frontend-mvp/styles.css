@@ -155,3 +155,85 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#171511}
   .qr-box img,.qr-box canvas{max-width:256px!important;max-height:256px!important}
   .qr-meta{flex-direction:column;gap:5px;text-align:center}
 }
+
+
+/* PortoPlan PE inspired login */
+.login-wrap{
+  position:relative;
+  overflow:hidden;
+  background:
+    radial-gradient(circle at 50% 0%,rgba(199,154,59,.10),transparent 34%),
+    linear-gradient(180deg,#070707 0%,#0b0b0b 100%);
+}
+.login-wrap:before{
+  content:"";
+  position:absolute;
+  width:520px;height:520px;
+  border:1px solid rgba(199,154,59,.10);
+  border-radius:50%;
+  top:-250px;left:50%;
+  transform:translateX(-50%);
+  box-shadow:0 0 0 80px rgba(199,154,59,.018),0 0 0 160px rgba(199,154,59,.012);
+  pointer-events:none;
+}
+.login-shell{width:min(430px,92vw);position:relative;z-index:1}
+.login-brand{margin-bottom:26px}
+.login-logo{width:230px;max-height:88px}
+.login-brand span{background:transparent;border-color:rgba(199,154,59,.42);color:var(--gold-2)}
+.login-card{
+  border-radius:14px;
+  padding:34px 34px 30px;
+  background:rgba(16,16,16,.94);
+  border:1px solid rgba(199,154,59,.24);
+  box-shadow:0 24px 80px rgba(0,0,0,.50);
+}
+.login-card-head{text-align:center;margin-bottom:24px}
+.login-card-head .eyebrow{margin-bottom:10px}
+.login-card h1{font-size:24px;margin-bottom:8px}
+.login-copy{font-size:13px;margin:0;color:var(--muted)}
+.login-card form{gap:8px}
+.login-card label{font-size:12px;font-weight:600;color:#d8d1c5;margin-top:8px}
+.login-card input{
+  min-height:48px;
+  border-radius:8px;
+  border:1px solid #332f28;
+  background:#0a0a0a;
+  padding:0 14px;
+}
+.password-field{position:relative}
+.password-field input{padding-right:48px}
+.password-eye{
+  position:absolute;
+  right:7px;
+  top:50%;
+  transform:translateY(-50%);
+  width:36px;height:36px;
+  display:grid;place-items:center;
+  border:0;background:transparent;
+  color:#8f887d;
+  border-radius:7px;
+  cursor:pointer;
+  padding:0;
+}
+.password-eye:hover{color:var(--gold-2);background:rgba(199,154,59,.07)}
+.password-eye svg{width:20px;height:20px}
+.login-submit{
+  min-height:48px;
+  margin-top:16px;
+  border-radius:8px;
+  letter-spacing:.01em;
+  box-shadow:none;
+}
+.login-submit:hover{box-shadow:0 8px 24px rgba(199,154,59,.15)}
+:root[data-theme="light"] .login-wrap{
+  background:
+    radial-gradient(circle at 50% 0%,rgba(185,138,46,.12),transparent 34%),
+    linear-gradient(180deg,#f4f1ea 0%,#ece7dc 100%);
+}
+:root[data-theme="light"] .login-card{
+  background:rgba(255,255,255,.96);
+  border-color:rgba(185,138,46,.26);
+}
+:root[data-theme="light"] .login-card label{color:#4a4338}
+:root[data-theme="light"] .login-card input{background:#fff;border-color:#d8d0c3;color:#24211c}
+:root[data-theme="light"] .password-eye{color:#756c60}
