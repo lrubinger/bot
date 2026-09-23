@@ -77,7 +77,11 @@ function renderMenu(){
   document.querySelectorAll("[data-page]").forEach(el=>el.onclick=()=>navigate(el.dataset.page));
 }
 function navigate(page){state.page=page;renderMenu();loadPage();}
-function setTitle(t){$("#pageTitle").textContent=t}
+function setTitle(t){
+  $("#pageTitle").textContent=t;
+  const browserTitle = t === "Dashboard" ? "Bot" : t;
+  document.title = `${browserTitle} | PortoPlan`;
+}
 function content(html){$("#content").innerHTML=html}
 function modal(html){$("#modalBody").innerHTML=html;$("#modal").classList.remove("hidden")}
 function closeModal(){ $("#modal").classList.add("hidden"); $("#modalBody").innerHTML="" }
