@@ -18,10 +18,11 @@ const CreateService = async (data: Data): Promise<Chat> => {
     title
   });
 
+  await ChatUser.findOrCreate({ where: { chatId: record.id, userId: ownerId }, defaults: { unreads: 0 } as any });
   if (Array.isArray(users) && users.length > 0) {
-    await ChatUser.create({ chatId: record.id, userId: ownerId });
-    for (let user of users) {
-      await ChatUser.create({ chatId: record.id, userId: user.id });
+    const ids = Array.from(new Set(users.map(user => +user.id).filter(id => id && id !== ownerId)));
+    for (const userId of ids) {
+      await ChatUser.findOrCreate({ where: { chatId: record.id, userId }, defaults: { unreads: 0 } as any });
     }
   }
 
