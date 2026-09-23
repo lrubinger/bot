@@ -54,7 +54,10 @@ if (togglePassword) {
     const input = $("#password");
     const showing = input.type === "text";
     input.type = showing ? "password" : "text";
-    togglePassword.textContent = showing ? "Mostrar" : "Ocultar";
+    togglePassword.querySelector(".eye-open")?.classList.toggle("hidden", !showing);
+    togglePassword.querySelector(".eye-closed")?.classList.toggle("hidden", showing);
+    togglePassword.setAttribute("aria-label", showing ? "Mostrar senha" : "Ocultar senha");
+    togglePassword.title = showing ? "Mostrar senha" : "Ocultar senha";
   };
 }
 $("#loginForm").onsubmit = async e => {
