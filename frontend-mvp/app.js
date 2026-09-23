@@ -27,6 +27,15 @@ async function api(path, options={}) {
 function loginView(show=true){ $("#login").classList.toggle("hidden",!show); $("#app").classList.toggle("hidden",show); }
 function logout(){ state.token=""; state.user=null; localStorage.removeItem("pp_token"); localStorage.removeItem("pp_user"); loginView(true); }
 $("#logoutBtn").onclick = logout;
+const togglePassword = $("#togglePassword");
+if (togglePassword) {
+  togglePassword.onclick = () => {
+    const input = $("#password");
+    const showing = input.type === "text";
+    input.type = showing ? "password" : "text";
+    togglePassword.textContent = showing ? "Mostrar" : "Ocultar";
+  };
+}
 $("#loginForm").onsubmit = async e => {
   e.preventDefault(); $("#loginError").textContent="";
   try{
