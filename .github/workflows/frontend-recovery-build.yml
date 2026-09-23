@@ -1,0 +1,35 @@
+name: Frontend Recovery Build
+
+on:
+  push:
+    branches:
+      - recuperacao-backend
+  workflow_dispatch:
+
+jobs:
+  build-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 16
+        uses: actions/setup-node@v4
+        with:
+          node-version: "16"
+          cache: npm
+          cache-dependency-path: frontend/package.json
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build frontend
+        env:
+          NODE_OPTIONS: --openssl-legacy-provider
+          GENERATE_SOURCEMAP: "false"
+        run: npm run build
