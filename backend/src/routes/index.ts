@@ -31,6 +31,8 @@ import filesRoutes from "./filesRoutes";
 import promptRoutes from "./promptRouter";
 import queueIntegrationRoutes from "./queueIntegrationRoutes";
 import profileRoutes from "./profileRoutes";
+import internalChatRoutes from "./internalChatRoutes";
+import companyKanbanRoutes from "./companyKanbanRoutes";
 const routes = Router();
 
 routes.use(userRoutes);
@@ -65,5 +67,7 @@ routes.use(filesRoutes);
 routes.use(promptRoutes);
 routes.use(queueIntegrationRoutes);
 routes.use(profileRoutes);
+routes.use(internalChatRoutes);
+routes.use(companyKanbanRoutes);
 
 export default routes;
