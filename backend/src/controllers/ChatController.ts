@@ -31,32 +31,71 @@ type FindParams = {
 };
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
-  const { pageNumber } = req.query as unknown as IndexQuery;
+  const { pageNumber = "1" } = req.query as unknown as IndexQuery;
   const ownerId = +req.user.id;
+  const requester = await User.findByPk(ownerId);
 
-  const { records, count, hasMore } = await ListService({
-    ownerId,
-    pageNumber
-  });
+  if (requester?.super) {
+    const limit = 50;
+    const offset = limit * (+pageNumber - 1);
+    const { count, rows: records } = await Chat.findAndCountAll({
+      include: [
+        { model: User, as: "owner" },
+        { model: ChatUser, as: "users", include: [{ model: User, as: "user" }] }
+      ],
+      limit,
+      offset,
+      order: [["updatedAt", "DESC"]]
+    });
+    return res.json({ records, count, hasMore: count > offset + records.length });
+  }
 
+  const { records, count, hasMore } = await ListService({ ownerId, pageNumber });
   return res.json({ records, count, hasMore });
 };
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
-  const { companyId } = req.user;
   const ownerId = +req.user.id;
+  const requester = await User.findByPk(ownerId);
+  if (!requester) return res.status(404).json({ error: "ERR_NO_USER_FOUND" });
+
   const data = req.body as StoreData;
+  const requestedIds = Array.from(new Set((data.users || []).map(u => +(u.id || u.userId)).filter(Boolean)));
+  const requestedUsers = requestedIds.length
+    ? await User.findAll({ where: { id: requestedIds } })
+    : [];
+
+  let chatCompanyId = requester.companyId;
+
+  if (!requester.super) {
+    const invalid = requestedUsers.some(u => u.companyId !== requester.companyId && !u.super);
+    if (invalid) return res.status(403).json({ error: "ERR_CHAT_COMPANY_SCOPE" });
+  } else {
+    const targetCompanies = Array.from(new Set(requestedUsers.filter(u => !u.super).map(u => u.companyId)));
+    if (targetCompanies.length > 1) {
+      return res.status(400).json({ error: "Selecione usuários de apenas uma empresa por conversa." });
+    }
+    if (targetCompanies.length === 1) chatCompanyId = targetCompanies[0];
+  }
+
+  // PortoPlan master users are always participants, so every company can contact support
+  // without gaining access to users from other companies.
+  const masters = await User.findAll({ where: { super: true } });
+  const merged = new Map<number, User>();
+  [...requestedUsers, ...masters].forEach(u => {
+    if (u.id !== ownerId) merged.set(u.id, u);
+  });
 
   const record = await CreateService({
     ...data,
+    users: Array.from(merged.values()).map(u => ({ id: u.id })),
     ownerId,
-    companyId
+    companyId: chatCompanyId
   });
 
   const io = getIO();
-
   record.users.forEach(user => {
-    io.emit(`company-${companyId}-chat-user-${user.userId}`, {
+    io.emit(`company-${chatCompanyId}-chat-user-${user.userId}`, {
       action: "create",
       record
     });
