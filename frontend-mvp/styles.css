@@ -88,3 +88,70 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#171511}
   .sidebar{width:82px;padding:16px 8px}.sidebar-logo{display:none}.product-chip{margin:4px 8px}.sidebar-brand{padding:0 0 12px}.menu-item span:first-child{font-size:0}.menu-item span:first-child:before{content:"•";font-size:20px}.menu-title,.sidebar-footer{display:none}
   .main{margin-left:82px;width:calc(100% - 82px);padding:18px}.kanban{grid-template-columns:1fr}.topbar{gap:15px}.main h1{font-size:23px}
 }
+
+/* Theme switch */
+:root[data-theme="light"]{
+  --bg:#f4f2ed;
+  --bg-2:#ffffff;
+  --panel:#ffffff;
+  --panel-2:#f8f6f1;
+  --line:#ddd6c9;
+  --line-soft:#e8e3d9;
+  --text:#24211c;
+  --muted:#777065;
+  --gold:#b98a2e;
+  --gold-2:#c99c43;
+  --gold-soft:rgba(185,138,46,.12);
+  --danger:#c94040;
+  --success:#218f61;
+}
+:root[data-theme="light"] body{
+  background:radial-gradient(circle at 75% -10%,rgba(185,138,46,.10),transparent 30%),var(--bg);
+}
+:root[data-theme="light"] .login-wrap{background:linear-gradient(135deg,#f0ede6,#faf9f6 55%,#eeeae1)}
+:root[data-theme="light"] .login-card,
+:root[data-theme="light"] .card,
+:root[data-theme="light"] .table-wrap,
+:root[data-theme="light"] .kan-col,
+:root[data-theme="light"] .modal-card{background:linear-gradient(180deg,#fff,#f8f6f1);box-shadow:0 18px 50px rgba(45,38,26,.10)}
+:root[data-theme="light"] .sidebar{background:linear-gradient(180deg,#fff,#f7f4ee)}
+:root[data-theme="light"] .login-card input,
+:root[data-theme="light"] .toolbar input,
+:root[data-theme="light"] .composer textarea{background:#fff;color:#24211c}
+:root[data-theme="light"] th{background:#f5f1e9}
+:root[data-theme="light"] td{color:#373228}
+:root[data-theme="light"] .ghost{background:#fff;color:#494237}
+:root[data-theme="light"] .ghost:hover{background:#f4efe5;color:#17140f}
+:root[data-theme="light"] .menu-item{color:#5d574d}
+:root[data-theme="light"] .menu-item:hover{background:#f4efe5;color:#17140f}
+:root[data-theme="light"] .menu-item.active{color:#17140f}
+:root[data-theme="light"] .messages{background:#f5f2ec}
+:root[data-theme="light"] .msg{background:#fff;color:#26221b}
+:root[data-theme="light"] .msg.me{background:#f3e5c7}
+:root[data-theme="light"] .modal{background:rgba(28,24,18,.42)}
+:root[data-theme="light"] .modal-card p{color:#5f584e}
+:root[data-theme="light"] .modal-close{color:#4c453a}
+
+.topbar-actions{display:flex;align-items:center;gap:9px}
+.theme-toggle{width:40px;height:40px;display:grid;place-items:center;border-radius:10px;border:1px solid #3b3428;background:var(--panel);color:var(--text);cursor:pointer;font-size:17px}
+.theme-toggle:hover{border-color:var(--gold)}
+.floating-theme{position:fixed;right:18px;top:18px;z-index:60}
+
+/* QR connection experience */
+.qr-modal-head h2{margin:2px 0 8px;font-size:28px}
+.qr-instructions{line-height:1.55;margin:0 0 16px}
+.qr-status{min-height:20px;color:var(--muted);font-size:13px;margin:10px 0;text-align:center}
+.qr-status.ready{color:var(--gold-2)}
+.qr-status.connected{color:var(--success);font-weight:700}
+.qr-status.warning{color:var(--danger)}
+.qr-box{min-width:336px;min-height:336px}
+.qr-box img,.qr-box canvas{display:block;max-width:300px!important;max-height:300px!important}
+.qr-loading{width:38px;height:38px;border:4px solid #ddd;border-top-color:#777;border-radius:50%;animation:qrspin .8s linear infinite}
+@keyframes qrspin{to{transform:rotate(360deg)}}
+.qr-meta{display:flex;justify-content:space-between;gap:16px;align-items:center;color:var(--muted);font-size:12px;margin-top:-7px}
+.qr-restart{display:block;margin:18px auto 0}
+@media(max-width:560px){
+  .qr-box{min-width:280px;min-height:280px;padding:12px}
+  .qr-box img,.qr-box canvas{max-width:256px!important;max-height:256px!important}
+  .qr-meta{flex-direction:column;gap:5px;text-align:center}
+}
