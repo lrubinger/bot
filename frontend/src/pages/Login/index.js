@@ -10,9 +10,9 @@ import Box from "@material-ui/core/Box";
 import Typography from "@material-ui/core/Typography";
 import { makeStyles } from "@material-ui/core/styles";
 import Container from "@material-ui/core/Container";
-import { versionSystem } from "../../../package.json";
+import packageInfo from "../../../package.json";
 import { i18n } from "../../translate/i18n";
-import { nomeEmpresa } from "../../../package.json";
+const { nomeEmpresa, versionSystem } = packageInfo;
 import { AuthContext } from "../../context/Auth/AuthContext";
 import logo from "../../assets/logo.png";
 
