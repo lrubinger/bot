@@ -35,6 +35,12 @@ class User extends Model<User> {
 
   @Column
   email: string;
+
+  @Column
+  phone: string;
+
+  @Column(DataType.TEXT)
+  address: string;
   
   @Column
   allTicket: string;
