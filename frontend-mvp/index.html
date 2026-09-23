@@ -56,11 +56,14 @@
   </div>
 
   <div id="app" class="app hidden">
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div class="sidebar-brand">
         <img src="./assets/logo.png" alt="PortoPlan" class="sidebar-logo" />
-        <div class="product-chip">BOT</div>
+        <div class="product-chip">CHATBOT</div>
       </div>
+      <button type="button" id="sidebarToggle" class="sidebar-toggle" aria-label="Reduzir menu" title="Reduzir menu">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6M4 4h16v16H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
       <nav id="menu"></nav>
       <div class="sidebar-footer">PortoPlan • Ambiente de teste</div>
     </aside>
@@ -72,12 +75,27 @@
           <div class="muted" id="userLine"></div>
         </div>
         <div class="topbar-actions">
+          <button type="button" id="settingsBtn" class="icon-button" aria-label="Configurações" title="Configurações">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm8 3a7.8 7.8 0 0 0-.1-1.3l2-1.6-2-3.4-2.5 1a8 8 0 0 0-2.2-1.3L14.8 3h-4l-.4 2.4a8 8 0 0 0-2.2 1.3l-2.5-1-2 3.4 2 1.6A7.8 7.8 0 0 0 5.6 12c0 .4 0 .9.1 1.3l-2 1.6 2 3.4 2.5-1a8 8 0 0 0 2.2 1.3l.4 2.4h4l.4-2.4a8 8 0 0 0 2.2-1.3l2.5 1 2-3.4-2-1.6c.1-.4.1-.9.1-1.3Z" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linejoin="round"/></svg>
+          </button>
           <button id="logoutBtn" class="ghost">Sair</button>
         </div>
       </header>
       <section id="content"></section>
     </main>
   </div>
+
+  <div id="settingsBackdrop" class="drawer-backdrop hidden"></div>
+  <aside id="settingsDrawer" class="settings-drawer" aria-hidden="true">
+    <div class="drawer-header">
+      <div>
+        <h2>Configurações</h2>
+        <p>Dados de acesso e conexão do Chatbot PortoPlan.</p>
+      </div>
+      <button type="button" id="settingsClose" class="drawer-close" aria-label="Fechar">×</button>
+    </div>
+    <div id="settingsContent" class="drawer-content"></div>
+  </aside>
 
   <div id="modal" class="modal hidden">
     <div class="modal-card">
