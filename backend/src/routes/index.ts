@@ -33,6 +33,7 @@ import queueIntegrationRoutes from "./queueIntegrationRoutes";
 import profileRoutes from "./profileRoutes";
 import internalChatRoutes from "./internalChatRoutes";
 import companyKanbanRoutes from "./companyKanbanRoutes";
+import metaWhatsAppRoutes from "./metaWhatsAppRoutes";
 const routes = Router();
 
 routes.use(userRoutes);
@@ -69,5 +70,6 @@ routes.use(queueIntegrationRoutes);
 routes.use(profileRoutes);
 routes.use(internalChatRoutes);
 routes.use(companyKanbanRoutes);
+routes.use(metaWhatsAppRoutes);
 
 export default routes;
