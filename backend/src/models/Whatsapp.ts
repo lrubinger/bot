@@ -106,6 +106,15 @@ class Whatsapp extends Model<Whatsapp> {
   token: string;
 
   @Column
+  wabaId: string;
+
+  @Column
+  phoneNumberId: string;
+
+  @Column
+  metaBusinessId: string;
+
+  @Column
   transferQueueId: number;
 
   @Column
