@@ -111,6 +111,22 @@ export const complete = async (
   let resolvedWabaId = wabaId ? String(wabaId) : "";
   let resolvedPhoneNumberId = phoneNumberId ? String(phoneNumberId) : "";
 
+  if (!resolvedWabaId) {
+    const debug = await graphRequest<any>(
+      "GET",
+      "/debug_token",
+      { input_token: tokenData.access_token },
+      `${appId}|${appSecret}`
+    );
+    const scopes = debug?.data?.granular_scopes || [];
+    const whatsappScope = scopes.find(
+      (scope: any) =>
+        scope?.scope === "whatsapp_business_management" ||
+        scope?.scope === "whatsapp_business_messaging"
+    );
+    resolvedWabaId = String(whatsappScope?.target_ids?.[0] || "");
+  }
+
   if (resolvedWabaId) {
     await graphRequest(
       "POST",
