@@ -138,6 +138,24 @@ async function startMetaSignup(){
   }
 }
 
+async function showWapiQr(connectionId){
+  modal(`<div class="qr-modal-head"><div class="eyebrow">CONEXÃO WHATSAPP</div><h2>Conectar meu WhatsApp</h2></div><p class="qr-instructions">No celular, abra o WhatsApp e acesse <b>Aparelhos conectados</b> → <b>Conectar um aparelho</b>. Depois escaneie o QR Code abaixo.</p><div id="qrStatus" class="qr-status">Gerando QR Code...</div><div id="qr" class="qr-box"><div class="qr-loading"></div></div><div class="qr-meta"><span id="qrHint">O QR Code será renovado automaticamente.</span><span id="qrCountdown"></span></div><button id="qrRestart" class="ghost qr-restart" type="button">Gerar novo QR Code</button>`);
+  let stopped=false; let born=Date.now();
+  const renderQr=async()=>{
+    const data=await api("/wapi/connection/"+connectionId+"/qr");
+    const box=$("#qr");
+    if(data&&data.qrcode){box.innerHTML=`<img src="${data.qrcode}" alt="QR Code do WhatsApp" class="wapi-qr-image" />`;$("#qrStatus").textContent="QR Code pronto para leitura.";born=Date.now();}
+    else{box.innerHTML=`<div class="error">A W-API não retornou um QR Code.</div>`;$("#qrStatus").textContent="Não foi possível gerar o QR Code.";}
+  };
+  const checkStatus=async()=>{
+    if(stopped||$("#modal").classList.contains("hidden"))return;
+    try{const s=await api("/wapi/connection/"+connectionId+"/status");if(s.connected){stopped=true;$("#qrStatus").textContent="WhatsApp conectado com sucesso.";setTimeout(()=>{closeModal();loadSettings();},900);return;}}catch(err){$("#qrStatus").textContent=err.message;}
+    setTimeout(checkStatus,1800);
+  };
+  $("#qrRestart").onclick=async()=>{try{$("#qrStatus").textContent="Gerando novo QR Code...";await api("/wapi/connection/"+connectionId+"/restart",{method:"POST"});await renderQr();}catch(err){$("#qrStatus").textContent=err.message;}};
+  const timer=setInterval(()=>{if(stopped||$("#modal").classList.contains("hidden")){clearInterval(timer);return;}const left=Math.max(0,30-(Math.floor((Date.now()-born)/1000)%30));const el=$("#qrCountdown");if(el)el.textContent="Atualização em ~"+left+"s";},1000);
+  try{await renderQr();setTimeout(checkStatus,700);}catch(err){$("#qrStatus").textContent=err.message||"Falha ao gerar QR Code.";$("#qr").innerHTML=`<div class="error">Verifique a instância e o token da W-API.</div>`;}
+}
 async function api(path, options={}) {
   const headers = { ...(options.headers||{}) };
   if (!(options.body instanceof FormData)) headers["Content-Type"] = headers["Content-Type"] || "application/json";
@@ -573,8 +591,7 @@ async function loadSettings(selectedId){
     const selected=String(selectedId || state.user?.id || users[0]?.id || "");
     const profile=await api("/profile/users/"+selected);
     const connections=await api("/profile/connections");
-    const metaConfig=await api("/meta/whatsapp/config");
-    metaSignupConfig=metaConfig;
+    const wapiConfig=await api("/wapi/config");
     const canChoose=users.length>1;
 
     box.innerHTML=`
@@ -592,13 +609,12 @@ async function loadSettings(selectedId){
           <div class="settings-actions"><button class="primary" type="submit">Salvar alterações</button><span id="profileSaveStatus" class="small"></span></div>
         </div>
       </form>
-      <div class="settings-section meta-connect-section">
-        <h3>Conexão oficial WhatsApp</h3>
-        <p class="settings-help">A conexão oficial usa a Plataforma do WhatsApp Business da Meta. O cadastro e a autorização são feitos no ambiente da Meta, sem leitura de QR Code.</p>
-        <button id="metaConnectBtn" class="primary" type="button" ${metaConfig.enabled?"":"disabled"}>
-          ${metaConfig.enabled?"Conectar com a Meta":"Configuração Meta pendente"}
-        </button>
-        <span id="metaConnectStatus" class="small meta-connect-status">${metaConfig.enabled?"":"Cadastre o App ID, App Secret e Configuration ID da Meta no servidor."}</span>
+      <div class="settings-section">
+        <h3>Conexão WhatsApp por QR Code</h3>
+        <p class="settings-help">O Chatbot PortoPlan usa a W-API para vincular o WhatsApp por QR Code. O token da instância fica protegido no servidor.</p>
+        ${wapiConfig.canAutoCreate
+          ? `<button id="wapiCreateBtn" class="primary" type="button">Criar conexão e gerar QR Code</button><span id="wapiConnectStatus" class="small"></span>`
+          : `<div class="settings-grid"><label class="full"><span>Instance ID da W-API</span><input id="wapiInstanceId" placeholder="Ex.: T34398-VYR3QD-MS29SL" /></label><label class="full"><span>Token da instância</span><input id="wapiToken" type="password" placeholder="Token da W-API" /></label></div><div class="settings-actions"><button id="wapiLinkBtn" class="primary" type="button">Vincular instância</button><span id="wapiConnectStatus" class="small"></span></div>`}
       </div>
       <div class="settings-section">
         <h3>Conexões cadastradas</h3>
@@ -612,20 +628,35 @@ async function loadSettings(selectedId){
               </div>
               <span class="connection-status ${String(w.status||"").toLowerCase()}">${esc(w.status||"DISCONNECTED")}</span>
               <div class="connection-actions">
-                ${w.provider==="meta-cloud"
-                  ? '<span class="pill">Meta Cloud API</span>'
-                  : `<button class="ghost settings-qr" data-id="${w.id}" type="button">QR Code (legado)</button>
-                     <button class="ghost settings-disconnect" data-id="${w.id}" type="button">Desconectar</button>`}
+                ${w.provider==="w-api"
+                  ? `<button class="ghost settings-wapi-qr" data-id="${w.id}" type="button">QR Code</button>
+                     <button class="ghost settings-wapi-disconnect" data-id="${w.id}" type="button">Desconectar</button>`
+                  : `<span class="pill">Conexão legada</span><button class="ghost settings-qr" data-id="${w.id}" type="button">QR Code legado</button>`}
               </div>
             </div>`).join(""):'<div class="empty-state">Nenhuma conexão vinculada a este usuário.</div>'}
         </div>
       </div>
     `;
 
-    $("#metaConnectBtn")?.addEventListener("click",startMetaSignup);
-    if(metaConfig.enabled){
-      ensureMetaSdk(metaConfig).catch(()=>{});
-    }
+    $("#wapiCreateBtn")?.addEventListener("click",async()=>{
+      const status=$("#wapiConnectStatus");
+      try{
+        status.textContent="Criando instância...";
+        const created=await api("/wapi/connection/create",{method:"POST",body:JSON.stringify({name:"PortoPlan WhatsApp"})});
+        status.textContent="Instância criada."; await showWapiQr(created.id);
+      }catch(err){status.textContent=err.message;}
+    });
+    $("#wapiLinkBtn")?.addEventListener("click",async()=>{
+      const status=$("#wapiConnectStatus");
+      try{
+        const instanceId=$("#wapiInstanceId").value.trim();
+        const token=$("#wapiToken").value.trim();
+        if(!instanceId||!token){status.textContent="Informe Instance ID e Token.";return;}
+        status.textContent="Validando instância...";
+        const linked=await api("/wapi/connection/link",{method:"POST",body:JSON.stringify({instanceId,token,name:"PortoPlan WhatsApp"})});
+        status.textContent="Instância vinculada."; await showWapiQr(linked.id);
+      }catch(err){status.textContent=err.message;}
+    });
     $("#settingsUserSelect")?.addEventListener("change",e=>loadSettings(e.target.value));
     $("#profileForm").onsubmit=async e=>{
       e.preventDefault();
@@ -647,6 +678,11 @@ async function loadSettings(selectedId){
       }
     };
 
+    document.querySelectorAll(".settings-wapi-qr").forEach(b=>b.onclick=()=>showWapiQr(b.dataset.id));
+    document.querySelectorAll(".settings-wapi-disconnect").forEach(b=>b.onclick=async()=>{
+      await api("/wapi/connection/"+b.dataset.id,{method:"DELETE"});
+      loadSettings(selected);
+    });
     document.querySelectorAll(".settings-qr").forEach(b=>b.onclick=()=>showProfileQr(b.dataset.id));
     document.querySelectorAll(".settings-disconnect").forEach(b=>b.onclick=async()=>{
       await api("/profile/connections/"+b.dataset.id+"/disconnect",{method:"DELETE"});
