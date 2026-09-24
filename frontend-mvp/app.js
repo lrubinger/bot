@@ -52,6 +52,92 @@ function menuIcon(name){
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
+let metaSignupConfig = null;
+let metaSessionInfo = {};
+
+function ensureMetaSdk(config){
+  return new Promise((resolve,reject)=>{
+    if(!config?.enabled) return reject(new Error("Integração Meta ainda não configurada."));
+    if(window.FB){
+      FB.init({appId:config.appId,cookie:true,xfbml:false,version:config.graphVersion||"v25.0"});
+      return resolve();
+    }
+    const previous=window.fbAsyncInit;
+    window.fbAsyncInit=function(){
+      if(typeof previous==="function") previous();
+      FB.init({appId:config.appId,cookie:true,xfbml:false,version:config.graphVersion||"v25.0"});
+      resolve();
+    };
+    if(document.getElementById("facebook-jssdk")) return;
+    const js=document.createElement("script");
+    js.id="facebook-jssdk";
+    js.async=true;
+    js.defer=true;
+    js.crossOrigin="anonymous";
+    js.src="https://connect.facebook.net/pt_BR/sdk.js";
+    js.onerror=()=>reject(new Error("Não foi possível carregar o SDK da Meta."));
+    document.head.appendChild(js);
+  });
+}
+
+window.addEventListener("message",event=>{
+  if(!String(event.origin||"").includes("facebook.com")) return;
+  let payload=event.data;
+  try{ if(typeof payload==="string") payload=JSON.parse(payload); }catch(_){}
+  if(payload?.type!=="WA_EMBEDDED_SIGNUP") return;
+  const eventName=String(payload.event||"");
+  if(eventName.startsWith("FINISH")){
+    metaSessionInfo=payload.data||{};
+  }
+});
+
+async function startMetaSignup(){
+  const status=$("#metaConnectStatus");
+  try{
+    if(!metaSignupConfig?.enabled) throw new Error("A integração oficial da Meta ainda não está configurada.");
+    await ensureMetaSdk(metaSignupConfig);
+    if(status) status.textContent="Abrindo cadastro oficial da Meta...";
+    metaSessionInfo={};
+
+    FB.login(async response=>{
+      try{
+        const code=response?.authResponse?.code;
+        if(!code){
+          if(status) status.textContent="Conexão cancelada ou não autorizada.";
+          return;
+        }
+
+        if(status) status.textContent="Finalizando conexão com a Meta...";
+        const data=metaSessionInfo||{};
+        await api("/meta/whatsapp/complete",{
+          method:"POST",
+          body:JSON.stringify({
+            code,
+            wabaId:data.waba_id||data.wabaId||"",
+            phoneNumberId:data.phone_number_id||data.phoneNumberId||"",
+            businessId:data.business_id||data.businessId||""
+          })
+        });
+
+        if(status) status.textContent="WhatsApp conectado oficialmente pela Meta.";
+        setTimeout(()=>loadSettings(),700);
+      }catch(err){
+        if(status) status.textContent=err.message||"Falha ao finalizar a conexão.";
+      }
+    },{
+      config_id:metaSignupConfig.configId,
+      response_type:"code",
+      override_default_response_type:true,
+      extras:{
+        setup:{},
+        featureType:"whatsapp_business_app_onboarding"
+      }
+    });
+  }catch(err){
+    if(status) status.textContent=err.message||"Falha ao iniciar a conexão Meta.";
+  }
+}
+
 async function api(path, options={}) {
   const headers = { ...(options.headers||{}) };
   if (!(options.body instanceof FormData)) headers["Content-Type"] = headers["Content-Type"] || "application/json";
@@ -487,6 +573,8 @@ async function loadSettings(selectedId){
     const selected=String(selectedId || state.user?.id || users[0]?.id || "");
     const profile=await api("/profile/users/"+selected);
     const connections=await api("/profile/connections");
+    const metaConfig=await api("/meta/whatsapp/config");
+    metaSignupConfig=metaConfig;
     const canChoose=users.length>1;
 
     box.innerHTML=`
@@ -504,8 +592,16 @@ async function loadSettings(selectedId){
           <div class="settings-actions"><button class="primary" type="submit">Salvar alterações</button><span id="profileSaveStatus" class="small"></span></div>
         </div>
       </form>
+      <div class="settings-section meta-connect-section">
+        <h3>Conexão oficial WhatsApp</h3>
+        <p class="settings-help">A conexão oficial usa a Plataforma do WhatsApp Business da Meta. O cadastro e a autorização são feitos no ambiente da Meta, sem leitura de QR Code.</p>
+        <button id="metaConnectBtn" class="primary" type="button" ${metaConfig.enabled?"":"disabled"}>
+          ${metaConfig.enabled?"Conectar com a Meta":"Configuração Meta pendente"}
+        </button>
+        <span id="metaConnectStatus" class="small meta-connect-status">${metaConfig.enabled?"":"Cadastre o App ID, App Secret e Configuration ID da Meta no servidor."}</span>
+      </div>
       <div class="settings-section">
-        <h3>Conexão WhatsApp</h3>
+        <h3>Conexões cadastradas</h3>
         <p class="settings-help">${canChoose?"Como administrador PortoPlan, você visualiza todas as conexões.":"Aqui aparece somente a conexão vinculada ao seu usuário."}</p>
         <div class="settings-connections">
           ${connections.length?connections.map(w=>`
@@ -516,14 +612,20 @@ async function loadSettings(selectedId){
               </div>
               <span class="connection-status ${String(w.status||"").toLowerCase()}">${esc(w.status||"DISCONNECTED")}</span>
               <div class="connection-actions">
-                <button class="ghost settings-qr" data-id="${w.id}" type="button">QR Code</button>
-                <button class="ghost settings-disconnect" data-id="${w.id}" type="button">Desconectar</button>
+                ${w.provider==="meta-cloud"
+                  ? '<span class="pill">Meta Cloud API</span>'
+                  : `<button class="ghost settings-qr" data-id="${w.id}" type="button">QR Code (legado)</button>
+                     <button class="ghost settings-disconnect" data-id="${w.id}" type="button">Desconectar</button>`}
               </div>
             </div>`).join(""):'<div class="empty-state">Nenhuma conexão vinculada a este usuário.</div>'}
         </div>
       </div>
     `;
 
+    $("#metaConnectBtn")?.addEventListener("click",startMetaSignup);
+    if(metaConfig.enabled){
+      ensureMetaSdk(metaConfig).catch(()=>{});
+    }
     $("#settingsUserSelect")?.addEventListener("change",e=>loadSettings(e.target.value));
     $("#profileForm").onsubmit=async e=>{
       e.preventDefault();
