@@ -101,7 +101,7 @@ export const connections = async (req: Request, res: Response): Promise<Response
 
   if (requester.super) {
     const items = await Whatsapp.findAll({
-      attributes: ["id", "name", "status", "qrcode", "companyId"],
+      attributes: ["id", "name", "status", "qrcode", "companyId", "provider", "wabaId", "phoneNumberId"],
       include: [{ model: Company, as: "company", attributes: ["id", "name"] }],
       order: [["companyId", "ASC"], ["name", "ASC"]]
     });
@@ -112,7 +112,7 @@ export const connections = async (req: Request, res: Response): Promise<Response
 
   const item = await Whatsapp.findOne({
     where: { id: requester.whatsappId, companyId: requester.companyId },
-    attributes: ["id", "name", "status", "qrcode", "companyId"],
+    attributes: ["id", "name", "status", "qrcode", "companyId", "provider", "wabaId", "phoneNumberId"],
     include: [{ model: Company, as: "company", attributes: ["id", "name"] }]
   });
 
