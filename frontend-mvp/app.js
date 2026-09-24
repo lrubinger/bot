@@ -242,128 +242,111 @@ async function dashboard(){
 
 async function connections(){
   setTitle("Conexões WhatsApp");
-  const list=await api("/whatsapp/?session=0");
-  content(`<div class="toolbar"><button class="primary" id="newWa">Nova conexão</button></div>
-  <div class="table-wrap"><table><thead><tr><th>Nome</th><th>Status</th><th>Número</th><th>Ações</th></tr></thead><tbody>
-  ${(list||[]).map(w=>`<tr><td>${esc(w.name)}</td><td><span class="pill">${esc(w.status||"")}</span></td><td>${esc(w.number||"")}</td>
-  <td><button class="ghost qr" data-id="${w.id}">QR Code</button> <button class="ghost restart" data-id="${w.id}">Reiniciar</button></td></tr>`).join("")}
-  </tbody></table></div>`);
-  $("#newWa").onclick=async()=>{const name=prompt("Nome da conexão:","WhatsApp Principal"); if(!name)return; await api("/whatsapp/",{method:"POST",body:JSON.stringify({name,isDefault:false,queueIds:[]})}); connections()};
-  document.querySelectorAll(".restart").forEach(b=>b.onclick=async()=>{await api("/whatsappsession/"+b.dataset.id,{method:"PUT"}); setTimeout(()=>showQr(b.dataset.id),800)});
-  document.querySelectorAll(".qr").forEach(b=>b.onclick=()=>showQr(b.dataset.id));
+  const [list,wapiConfig]=await Promise.all([
+    api("/profile/connections"),
+    api("/wapi/config")
+  ]);
+
+  const wapiConnections=(list||[]).filter(w=>w.provider==="w-api");
+
+  content(`
+    <div class="toolbar">
+      <button class="primary" id="newWa">${wapiConfig.canAutoCreate?"Nova conexão":"Vincular W-API"}</button>
+      <span class="small">Conexão por QR Code via W-API</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Nome</th><th>Status</th><th>Provedor</th><th>Ações</th></tr></thead>
+        <tbody>
+          ${wapiConnections.length
+            ? wapiConnections.map(w=>`<tr>
+                <td>${esc(w.name||"WhatsApp")}</td>
+                <td><span class="pill">${esc(w.status||"DISCONNECTED")}</span></td>
+                <td>W-API</td>
+                <td>
+                  <button class="ghost wapi-qr" data-id="${w.id}">QR Code</button>
+                  <button class="ghost wapi-disconnect" data-id="${w.id}">Desconectar</button>
+                </td>
+              </tr>`).join("")
+            : '<tr><td colspan="4"><div class="empty-state">Nenhuma conexão W-API vinculada.</div></td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  `);
+
+  $("#newWa").onclick=async()=>{
+    if(wapiConfig.canAutoCreate){
+      try{
+        const created=await api("/wapi/connection/create",{
+          method:"POST",
+          body:JSON.stringify({name:"PortoPlan WhatsApp"})
+        });
+        await showWapiQr(created.id);
+      }catch(err){
+        modal(`<h2>Não foi possível criar a conexão</h2><div class="error">${esc(err.message)}</div>`);
+      }
+      return;
+    }
+
+    modal(`
+      <div class="qr-modal-head">
+        <div class="eyebrow">W-API</div>
+        <h2>Vincular instância</h2>
+      </div>
+      <p class="qr-instructions">
+        Informe o <b>Instance ID</b> e o <b>Token</b> da instância criada na W-API.
+        Depois o PortoPlan solicitará o QR Code diretamente à W-API.
+      </p>
+      <div class="settings-grid">
+        <label class="full"><span>Instance ID</span><input id="connectWapiInstance" placeholder="Instance ID da W-API" /></label>
+        <label class="full"><span>Token</span><input id="connectWapiToken" type="password" placeholder="Token da instância" /></label>
+      </div>
+      <div class="settings-actions">
+        <button id="connectWapiSave" class="primary" type="button">Vincular e gerar QR Code</button>
+        <span id="connectWapiStatus" class="small"></span>
+      </div>
+    `);
+
+    $("#connectWapiSave").onclick=async()=>{
+      const status=$("#connectWapiStatus");
+      try{
+        const instanceId=$("#connectWapiInstance").value.trim();
+        const token=$("#connectWapiToken").value.trim();
+        if(!instanceId||!token){status.textContent="Informe Instance ID e Token.";return;}
+        status.textContent="Validando instância...";
+        const linked=await api("/wapi/connection/link",{
+          method:"POST",
+          body:JSON.stringify({instanceId,token,name:"PortoPlan WhatsApp"})
+        });
+        closeModal();
+        await showWapiQr(linked.id);
+      }catch(err){
+        status.textContent=err.message||"Falha ao vincular instância.";
+      }
+    };
+  };
+
+  document.querySelectorAll(".wapi-qr").forEach(b=>b.onclick=()=>showWapiQr(b.dataset.id));
+  document.querySelectorAll(".wapi-disconnect").forEach(b=>b.onclick=async()=>{
+    try{
+      await api("/wapi/connection/"+b.dataset.id,{method:"DELETE"});
+      connections();
+    }catch(err){
+      modal(`<h2>Falha ao desconectar</h2><div class="error">${esc(err.message)}</div>`);
+    }
+  });
 }
 async function showQr(id){
   modal(`
     <div class="qr-modal-head">
-      <div>
-        <div class="eyebrow">Conexão WhatsApp</div>
-        <h2>Conectar meu WhatsApp</h2>
-      </div>
+      <div class="eyebrow">CONEXÃO LEGADA</div>
+      <h2>Conexão antiga</h2>
     </div>
     <p class="qr-instructions">
-      No celular, abra o WhatsApp e acesse <b>Aparelhos conectados</b> → <b>Conectar um aparelho</b>.
-      Depois, escaneie o QR Code abaixo.
+      Esta conexão usa o mecanismo antigo do WhatsApp Web e não será mais usada para novos vínculos.
     </p>
-    <div id="qrStatus" class="qr-status">Iniciando sessão...</div>
-    <div id="qr" class="qr-box"><div class="qr-loading"></div></div>
-    <div class="qr-meta">
-      <span id="qrHint">Aguardando o primeiro QR Code...</span>
-      <span id="qrCountdown"></span>
-    </div>
-    <button id="qrRestart" class="ghost qr-restart" type="button">Gerar novo QR Code</button>
+    <div class="qr-status warning">Use uma conexão W-API para gerar o QR Code corretamente.</div>
   `);
-
-  let stopped=false;
-  let lastQr="";
-  let qrBornAt=0;
-  let tries=0;
-
-  const setStatus=(msg,type="")=>{
-    const el=$("#qrStatus");
-    if(!el) return;
-    el.textContent=msg;
-    el.className="qr-status"+(type?(" "+type):"");
-  };
-
-  const renderQr=(value)=>{
-    const box=$("#qr");
-    if(!box || !value) return;
-    box.innerHTML="";
-    if(typeof QRCode!=="function"){
-      box.innerHTML='<div class="error">Gerador visual de QR Code indisponível.</div>';
-      return;
-    }
-    new QRCode(box,{text:value,width:300,height:300,correctLevel:QRCode.CorrectLevel.M});
-    qrBornAt=Date.now();
-    $("#qrHint").textContent="Por segurança, o QR Code é renovado automaticamente.";
-  };
-
-  const startSession=async(force=false)=>{
-    setStatus(force?"Gerando um novo QR Code...":"Iniciando sessão...");
-    try{
-      await api("/whatsappsession/"+id,{method:force?"PUT":"POST"});
-    }catch(e){
-      setStatus("Aguardando o QR Code do WhatsApp...");
-    }
-  };
-
-  $("#qrRestart").onclick=async()=>{
-    lastQr="";
-    qrBornAt=0;
-    const box=$("#qr"); if(box) box.innerHTML='<div class="qr-loading"></div>';
-    await startSession(true);
-  };
-
-  await startSession(false);
-
-  const poll=async()=>{
-    if(stopped || $("#modal").classList.contains("hidden")) return;
-    try{
-      const w=await api("/whatsapp/"+id+"?session=0");
-      const status=String(w.status||"aguardando").toUpperCase();
-
-      if(w.qrcode && w.qrcode!==lastQr){
-        lastQr=w.qrcode;
-        renderQr(w.qrcode);
-        setStatus("QR Code pronto para leitura.","ready");
-      }else if(status==="OPENING" || status==="QRCODE"){
-        setStatus(lastQr?"QR Code pronto para leitura.":"Preparando QR Code...");
-      }
-
-      if(status==="CONNECTED"){
-        stopped=true;
-        setStatus("WhatsApp conectado com sucesso.","connected");
-        $("#qrHint").textContent="Conexão concluída.";
-        $("#qrCountdown").textContent="";
-        setTimeout(()=>{ closeModal(); connections(); },1200);
-        return;
-      }
-
-      if(status==="DISCONNECTED"){
-        setStatus("Sessão desconectada. Gere um novo QR Code.","warning");
-      }
-    }catch(e){
-      setStatus(e.message||"Falha ao consultar a conexão.","warning");
-    }
-
-    tries++;
-    if(tries<240) setTimeout(poll,1000);
-    else setStatus("Tempo de espera esgotado. Gere um novo QR Code.","warning");
-  };
-
-  const countdown=setInterval(()=>{
-    if(stopped || $("#modal").classList.contains("hidden")){
-      clearInterval(countdown); return;
-    }
-    const el=$("#qrCountdown");
-    if(!el) return;
-    if(!qrBornAt){ el.textContent=""; return; }
-    const elapsed=Math.floor((Date.now()-qrBornAt)/1000);
-    const left=Math.max(0,30-(elapsed%30));
-    el.textContent=`Atualização em ~${left}s`;
-  },1000);
-
-  setTimeout(poll,350);
 }
 async function contacts(){
   setTitle("Contatos"); const data=await api("/contacts?pageNumber=1&searchParam=");
