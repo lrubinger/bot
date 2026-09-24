@@ -34,6 +34,7 @@ import profileRoutes from "./profileRoutes";
 import internalChatRoutes from "./internalChatRoutes";
 import companyKanbanRoutes from "./companyKanbanRoutes";
 import metaWhatsAppRoutes from "./metaWhatsAppRoutes";
+import wapiRoutes from "./wapiRoutes";
 const routes = Router();
 
 routes.use(userRoutes);
@@ -71,5 +72,6 @@ routes.use(profileRoutes);
 routes.use(internalChatRoutes);
 routes.use(companyKanbanRoutes);
 routes.use(metaWhatsAppRoutes);
+routes.use(wapiRoutes);
 
 export default routes;
