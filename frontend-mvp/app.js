@@ -161,7 +161,7 @@ async function api(path, options={}) {
   if (!(options.body instanceof FormData)) headers["Content-Type"] = headers["Content-Type"] || "application/json";
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
   const res = await fetch(API + path, { credentials:"include", ...options, headers });
-  if (res.status === 401 || res.status === 403) {
+  if (res.status === 401) {
     if (!path.includes("/auth/login")) logout();
   }
   const text = await res.text();
@@ -242,16 +242,14 @@ async function dashboard(){
 
 async function connections(){
   setTitle("Conexões WhatsApp");
-  const [list,wapiConfig]=await Promise.all([
-    api("/profile/connections"),
-    api("/wapi/config")
-  ]);
-
-  const wapiConnections=(list||[]).filter(w=>w.provider==="w-api");
+  const settled=await Promise.allSettled([api("/profile/connections"),api("/wapi/config")]);
+  const list=settled[0].status==="fulfilled"?(settled[0].value||[]):[];
+  const wapiConfig=settled[1].status==="fulfilled"?settled[1].value:{enabled:false,canAutoCreate:false};
+  const wapiConnections=list||[];
 
   content(`
     <div class="toolbar">
-      <button class="primary" id="newWa">${wapiConfig.canAutoCreate?"Nova conexão":"Vincular W-API"}</button>
+      <button class="primary" id="newWa">Conectar WhatsApp</button>
       <span class="small">Conexão por QR Code via W-API</span>
     </div>
     <div class="table-wrap">
@@ -262,11 +260,8 @@ async function connections(){
             ? wapiConnections.map(w=>`<tr>
                 <td>${esc(w.name||"WhatsApp")}</td>
                 <td><span class="pill">${esc(w.status||"DISCONNECTED")}</span></td>
-                <td>W-API</td>
-                <td>
-                  <button class="ghost wapi-qr" data-id="${w.id}">QR Code</button>
-                  <button class="ghost wapi-disconnect" data-id="${w.id}">Desconectar</button>
-                </td>
+                <td>${w.provider==="w-api"?"W-API":"Legado"}</td>
+                <td>${w.provider==="w-api"?`<button class="ghost wapi-qr" data-id="${w.id}">QR Code</button> <button class="ghost wapi-disconnect" data-id="${w.id}">Desconectar</button>`:`<button class="ghost legacy-qr" data-id="${w.id}">QR Code legado</button>`}</td>
               </tr>`).join("")
             : '<tr><td colspan="4"><div class="empty-state">Nenhuma conexão W-API vinculada.</div></td></tr>'}
         </tbody>
@@ -335,6 +330,7 @@ async function connections(){
       modal(`<h2>Falha ao desconectar</h2><div class="error">${esc(err.message)}</div>`);
     }
   });
+  document.querySelectorAll(".legacy-qr").forEach(b=>b.onclick=()=>showQr(b.dataset.id));
 }
 async function showQr(id){
   modal(`
@@ -574,7 +570,8 @@ async function loadSettings(selectedId){
     const selected=String(selectedId || state.user?.id || users[0]?.id || "");
     const profile=await api("/profile/users/"+selected);
     const connections=await api("/profile/connections");
-    const wapiConfig=await api("/wapi/config");
+    let wapiConfig={enabled:false,canAutoCreate:false};
+    try{ wapiConfig=await api("/wapi/config"); }catch(_){}
     const canChoose=users.length>1;
 
     box.innerHTML=`
