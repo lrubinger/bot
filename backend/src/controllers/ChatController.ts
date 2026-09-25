@@ -13,6 +13,7 @@ import Chat from "../models/Chat";
 import CreateMessageService from "../services/ChatService/CreateMessageService";
 import User from "../models/User";
 import ChatUser from "../models/ChatUser";
+import Company from "../models/Company";
 
 type IndexQuery = {
   pageNumber: string;
@@ -40,8 +41,8 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     const offset = limit * (+pageNumber - 1);
     const { count, rows: records } = await Chat.findAndCountAll({
       include: [
-        { model: User, as: "owner" },
-        { model: ChatUser, as: "users", include: [{ model: User, as: "user" }] }
+        { model: User, as: "owner", include: [{ model: Company, as: "company", attributes: ["id", "name"] }] },
+        { model: ChatUser, as: "users", include: [{ model: User, as: "user", include: [{ model: Company, as: "company", attributes: ["id", "name"] }] }] }
       ],
       limit,
       offset,
