@@ -91,13 +91,32 @@ export const update = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
-  if (req.user.profile !== "admin") {
+  const { id: requestUserId, companyId } = req.user;
+  const { userId } = req.params;
+  const requester = await (await import("../models/User")).default.findByPk(+requestUserId);
+  const target = await (await import("../models/User")).default.findByPk(+userId);
+
+  if (!requester || !target) {
+    throw new AppError("ERR_NO_USER_FOUND", 404);
+  }
+
+  const isMaster =
+    requester.super === true ||
+    String(requester.email || "").toLowerCase() === "admin@portoplan.com.br";
+  const isSelf = +requestUserId === +userId;
+  const sameCompany = requester.companyId === target.companyId;
+
+  if (!isMaster && !isSelf && !(requester.profile === "admin" && sameCompany)) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
-  const { id: requestUserId, companyId } = req.user;
-  const { userId } = req.params;
-  const userData = req.body;
+  const userData = { ...req.body };
+
+  // Only PortoPlan master may change access level.
+  if (!isMaster) {
+    delete userData.profile;
+    delete userData.companyId;
+  }
 
   const user = await UpdateUserService({
     userData,
@@ -107,7 +126,7 @@ export const update = async (
   });
 
   const io = getIO();
-  io.emit(`company-${companyId}-user`, {
+  io.emit(`company-${target.companyId}-user`, {
     action: "update",
     user
   });
