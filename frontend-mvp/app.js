@@ -372,10 +372,21 @@ async function openTicket(id){
 }
 async function kanban(){
   setTitle("Kanban");
-  let board=await api("/users/company-kanban");
-  if(!board || !Array.isArray(board.columns)) board={columns:[]};
+  const settings=await api("/settings");
+  const saved=(Array.isArray(settings)?settings:[]).find(s=>s.key==="portoplanMvpKanban");
+  let board={columns:[]};
+  if(saved?.value){
+    try{ board=JSON.parse(saved.value); }catch(_){}
+  }
+  if(!board || !Array.isArray(board.columns) || board.columns.length===0){
+    board={columns:[
+      {id:"new",title:"Novos",cards:[]},
+      {id:"progress",title:"Em andamento",cards:[]},
+      {id:"done",title:"Concluídos",cards:[]}
+    ]};
+  }
 
-  const save=async()=>api("/users/company-kanban",{method:"PUT",body:JSON.stringify(board)});
+  const save=async()=>api("/settings/portoplanMvpKanban",{method:"PUT",body:JSON.stringify({value:JSON.stringify(board)})});
   const render=()=>{
     content(`
       <div class="kanban-toolbar">
@@ -566,24 +577,30 @@ async function loadSettings(selectedId){
   box.innerHTML='<div class="drawer-loading">Carregando configurações...</div>';
 
   try{
-    const users=await api("/auth/settings/users");
+    const isMaster=Boolean(state.user?.super) || String(state.user?.email||"").toLowerCase()==="admin@portoplan.com.br";
+
+    let users=[state.user];
+    if(isMaster){
+      const list=await api("/users?searchParam=&pageNumber=1");
+      users=Array.isArray(list)?list:(list?.users||[]);
+      if(!users.length) users=[state.user];
+    }
+
     const selected=String(selectedId || state.user?.id || users[0]?.id || "");
-    const profile=await api("/auth/settings/profile/"+selected);
+    const profile=await api("/users/"+selected);
+
     let connections=[];
     try{
-      const rawConnections=await api("/whatsapp/profile/connections");
-      connections=Array.isArray(rawConnections)?rawConnections:(rawConnections?.whatsapps||rawConnections?.connections||[]);
+      const raw=await api("/whatsapp/?session=0");
+      connections=Array.isArray(raw)?raw:[];
     }catch(_){}
 
-    const canChoose=Array.isArray(users) && users.length>1;
-    const canChangeProfile=Boolean(state.user?.super) || String(state.user?.email||"").toLowerCase()==="admin@portoplan.com.br";
-
     box.innerHTML=`
-      ${canChoose?`
+      ${isMaster && users.length>1?`
         <div class="settings-section">
           <label class="field-label">Usuário</label>
           <select id="settingsUserSelect" class="settings-select">
-            ${users.map(u=>`<option value="${u.id}" ${String(u.id)===selected?"selected":""}>${esc(u.name)} · ${esc(u.company?.name||u.email||"")}</option>`).join("")}
+            ${users.map(u=>`<option value="${u.id}" ${String(u.id)===selected?"selected":""}>${esc(u.name)} · ${esc(u.email||"")}</option>`).join("")}
           </select>
         </div>`:""}
 
@@ -595,7 +612,7 @@ async function loadSettings(selectedId){
             <label><span>E-mail</span><input id="profileEmail" type="email" value="${esc(profile.email||"")}" /></label>
             <label><span>Telefone</span><input id="profilePhone" value="${esc(profile.phone||"")}" /></label>
             <label class="full"><span>Endereço</span><input id="profileAddress" value="${esc(profile.address||"")}" /></label>
-            ${canChangeProfile?`
+            ${isMaster?`
               <label><span>Nível de acesso</span>
                 <select id="profileAccess" class="settings-select">
                   <option value="user" ${profile.profile==="user"?"selected":""}>Usuário</option>
@@ -617,13 +634,12 @@ async function loadSettings(selectedId){
         <div class="settings-connections">
           ${connections.length?connections.map(w=>`
             <div class="connection-card">
-              <div><b>${esc(w.name||"WhatsApp")}</b><span>${esc(w.company?.name||"")}</span></div>
+              <div><b>${esc(w.name||"WhatsApp")}</b><span>${esc(w.number||"")}</span></div>
               <span class="connection-status ${String(w.status||"").toLowerCase()}">${esc(w.status||"DISCONNECTED")}</span>
               <div class="connection-actions">
                 <button class="ghost settings-qr" data-id="${w.id}" type="button">QR Code</button>
-                <button class="ghost settings-disconnect" data-id="${w.id}" type="button">Desconectar</button>
               </div>
-            </div>`).join(""):'<div class="empty-state">Nenhuma conexão vinculada.</div>'}
+            </div>`).join(""):'<div class="empty-state">Nenhuma conexão cadastrada.</div>'}
         </div>
       </div>
     `;
@@ -632,40 +648,30 @@ async function loadSettings(selectedId){
 
     $("#profileForm").onsubmit=async e=>{
       e.preventDefault();
-
       const payload={
         name:$("#profileName").value.trim(),
         email:$("#profileEmail").value.trim(),
         phone:$("#profilePhone").value.trim(),
         address:$("#profileAddress").value.trim()
       };
-
       const password=$("#profilePassword").value;
       if(password) payload.password=password;
+      if(isMaster && $("#profileAccess")) payload.profile=$("#profileAccess").value;
 
-      if(canChangeProfile && $("#profileAccess")){
-        payload.profile=$("#profileAccess").value;
-      }
-
-      const updated=await api("/auth/settings/profile/"+selected,{
+      const updated=await api("/users/"+selected,{
         method:"PUT",
         body:JSON.stringify(payload)
       });
 
       $("#profileSaveStatus").textContent="Dados salvos.";
-
       if(String(state.user?.id)===selected){
-        state.user={...state.user,...updated};
+        state.user={...state.user,...updated,phone:payload.phone,address:payload.address};
         localStorage.setItem("pp_user",JSON.stringify(state.user));
         $("#userLine").textContent=`${state.user.name||""} · ${state.user.email||""}`;
       }
     };
 
-    document.querySelectorAll(".settings-qr").forEach(b=>b.onclick=()=>showProfileQr(b.dataset.id));
-    document.querySelectorAll(".settings-disconnect").forEach(b=>b.onclick=async()=>{
-      await api("/whatsapp/profile/connections/"+b.dataset.id+"/disconnect",{method:"DELETE"});
-      loadSettings(selected);
-    });
+    document.querySelectorAll(".settings-qr").forEach(b=>b.onclick=()=>showQr(b.dataset.id));
   }catch(err){
     box.innerHTML=`<div class="error">Não foi possível carregar as configurações: ${esc(err.message)}</div>`;
   }
