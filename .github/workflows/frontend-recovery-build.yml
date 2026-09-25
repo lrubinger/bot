@@ -1,9 +1,6 @@
-name: Frontend Recovery Build
+name: Legacy Frontend Build
 
 on:
-  push:
-    branches:
-      - recuperacao-backend
   workflow_dispatch:
 
 jobs:
@@ -28,8 +25,7 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Build frontend
+      - name: Build legacy frontend
         env:
-          NODE_OPTIONS: --openssl-legacy-provider
           GENERATE_SOURCEMAP: "false"
         run: npm run build
