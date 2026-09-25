@@ -36,9 +36,6 @@ class InternalChatMessage extends Model<InternalChatMessage> {
   @Column(DataType.TEXT)
   body: string;
 
-  @Column(DataType.DATE)
-  readAt: Date;
-
   @CreatedAt
   createdAt: Date;
 
