@@ -652,21 +652,17 @@ async function renderSupportChat(silent=false){
   }
 
   box.innerHTML=`
-    ${master?`
-      <div class="support-selector-wrap">
-        <select id="supportConversationSelect" class="support-selector" aria-label="Selecionar cliente">
-          <option value="">Selecione um cliente</option>
-          ${supportContacts.map(c=>`
-            <option value="${c.id}" ${String(c.id)===String(supportSelectedUserId)?"selected":""}>
-              ${esc(c.company?.name||c.name)} — ${esc(c.email||"")}${c.unread?` (${c.unread} nova${c.unread>1?"s":""})`:""}
-            </option>`).join("")}
-        </select>
-      </div>`:
-      `<div class="support-peer">
-        <b>${selected?esc(selected.name):"PortoPlan"}</b>
-        <span>${selected?esc(selected.email||""):"Administrador Master"}</span>
-      </div>`
-    }
+    <div class="support-selector-wrap">
+      <select id="supportConversationSelect" class="support-selector" aria-label="${master?"Selecionar cliente":"Selecionar conversa"}">
+        <option value="">${master?"Selecione um cliente":"Selecione uma conversa"}</option>
+        ${supportContacts.map(c=>`
+          <option value="${c.id}" ${String(c.id)===String(supportSelectedUserId)?"selected":""}>
+            ${c.super || String(c.email||"").toLowerCase()==="admin@portoplan.com.br"
+              ? `PortoPlan — ${esc(c.name)}`
+              : `${esc(c.name)} — ${esc(c.company?.name||c.email||"")}`}${c.unread?` (${c.unread} nova${c.unread>1?"s":""})`:""}
+          </option>`).join("")}
+      </select>
+    </div>
 
     <div id="supportMessages" class="support-messages">
       ${!selected
