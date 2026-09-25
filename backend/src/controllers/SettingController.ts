@@ -22,10 +22,13 @@ export const update = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
-  if (req.user.profile !== "admin") {
+  const { settingKey: key } = req.params;
+
+  // The company Kanban is collaborative, so every authenticated user of the
+  // company may update only this dedicated setting. Other settings remain admin-only.
+  if (req.user.profile !== "admin" && key !== "portoplanMvpKanban") {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
-  const { settingKey: key } = req.params;
   const { value } = req.body;
   const { companyId } = req.user;
 
