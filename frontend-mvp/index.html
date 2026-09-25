@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0a0a0a" />
   <title>Bot | PortoPlan</title>
   <link rel="icon" type="image/png" href="./assets/favicon.png" />
-  <link rel="stylesheet" href="./styles.css?v=rollback-20260924" />
+  <link rel="stylesheet" href="./styles.css?v=20260925-chatpe" />
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
@@ -93,6 +93,20 @@
     </main>
   </div>
 
+  <div id="chatBackdrop" class="drawer-backdrop hidden"></div>
+  <aside id="chatDrawer" class="support-drawer" aria-hidden="true">
+    <div class="support-header">
+      <div>
+        <h2>Suporte PortoPlan</h2>
+        <p id="chatDrawerSubtitle">Conversa direta com a equipe PortoPlan</p>
+      </div>
+      <button type="button" id="chatClose" class="drawer-close" aria-label="Fechar">×</button>
+    </div>
+    <div id="chatDrawerContent" class="support-content">
+      <div class="drawer-loading">Carregando conversas...</div>
+    </div>
+  </aside>
+
   <div id="settingsBackdrop" class="drawer-backdrop hidden"></div>
   <aside id="settingsDrawer" class="settings-drawer" aria-hidden="true">
     <div class="drawer-header">
@@ -111,6 +125,6 @@
       <div id="modalBody"></div>
     </div>
   </div>
-  <script src="./app.js?v=20260925-prodapis"></script>
+  <script src="./app.js?v=20260925-chatpe"></script>
 </body>
 </html>
