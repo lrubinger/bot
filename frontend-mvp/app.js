@@ -568,7 +568,164 @@ function closeSettings(){
   $("#settingsBackdrop").classList.add("hidden");
 }
 $("#settingsBtn").onclick=openSettings;
-$("#chatBtn").onclick=()=>navigate("chat");
+let supportChatTimer=null;
+let supportSelectedUserId="";
+let supportContacts=[];
+
+function isSupportMaster(){
+  return Boolean(state.user?.super) || String(state.user?.email||"").toLowerCase()==="admin@portoplan.com.br";
+}
+
+function openSupportChat(){
+  $("#chatDrawer").classList.add("open");
+  $("#chatDrawer").setAttribute("aria-hidden","false");
+  $("#chatBackdrop").classList.remove("hidden");
+  $("#chatDrawerSubtitle").textContent=isSupportMaster()?"Atendimento individual dos clientes":"Conversa direta com a equipe PortoPlan";
+  loadSupportChat();
+  clearInterval(supportChatTimer);
+  supportChatTimer=setInterval(()=>refreshSupportChat(false),10000);
+}
+
+function closeSupportChat(){
+  $("#chatDrawer").classList.remove("open");
+  $("#chatDrawer").setAttribute("aria-hidden","true");
+  $("#chatBackdrop").classList.add("hidden");
+  if(supportChatTimer){clearInterval(supportChatTimer);supportChatTimer=null;}
+}
+
+async function refreshSupportUnread(){
+  try{
+    const data=await api("/internal-chat/unread");
+    const count=Number(data?.count||0);
+    const badge=$("#chatBadge");
+    if(badge){
+      badge.textContent=String(count);
+      badge.classList.toggle("hidden",count===0);
+    }
+    $("#chatBtn")?.classList.toggle("has-unread",count>0);
+  }catch(_){}
+}
+
+async function loadSupportChat(){
+  const box=$("#chatDrawerContent");
+  box.innerHTML='<div class="drawer-loading">Carregando conversas...</div>';
+  try{
+    supportContacts=await api("/internal-chat/contacts");
+    if(!Array.isArray(supportContacts)) supportContacts=[];
+
+    if(isSupportMaster()){
+      if(!supportSelectedUserId && supportContacts.length){
+        supportSelectedUserId=String(supportContacts[0].id);
+      }
+    }else{
+      const master=supportContacts.find(u=>u.super || String(u.email||"").toLowerCase()==="admin@portoplan.com.br");
+      if(master) supportSelectedUserId=String(master.id);
+      else if(!supportSelectedUserId && supportContacts.length) supportSelectedUserId=String(supportContacts[0].id);
+    }
+
+    await renderSupportChat();
+  }catch(err){
+    box.innerHTML=`<div class="error">Não foi possível carregar o chat: ${esc(err.message)}</div>`;
+  }
+}
+
+async function refreshSupportChat(reloadContacts=true){
+  if($("#chatDrawer").getAttribute("aria-hidden")==="true") return;
+  try{
+    if(reloadContacts){
+      const list=await api("/internal-chat/contacts");
+      if(Array.isArray(list)) supportContacts=list;
+    }
+    await renderSupportChat(true);
+  }catch(_){}
+  refreshSupportUnread();
+}
+
+async function renderSupportChat(silent=false){
+  const box=$("#chatDrawerContent");
+  const master=isSupportMaster();
+  const selected=supportContacts.find(u=>String(u.id)===String(supportSelectedUserId));
+
+  let messages=[];
+  if(selected){
+    messages=await api("/internal-chat/messages/"+selected.id);
+  }
+
+  box.innerHTML=`
+    ${master?`
+      <div class="support-selector-wrap">
+        <select id="supportConversationSelect" class="support-selector" aria-label="Selecionar cliente">
+          <option value="">Selecione um cliente</option>
+          ${supportContacts.map(c=>`
+            <option value="${c.id}" ${String(c.id)===String(supportSelectedUserId)?"selected":""}>
+              ${esc(c.company?.name||c.name)} — ${esc(c.email||"")}${c.unread?` (${c.unread} nova${c.unread>1?"s":""})`:""}
+            </option>`).join("")}
+        </select>
+      </div>`:
+      `<div class="support-peer">
+        <b>${selected?esc(selected.name):"PortoPlan"}</b>
+        <span>${selected?esc(selected.email||""):"Administrador Master"}</span>
+      </div>`
+    }
+
+    <div id="supportMessages" class="support-messages">
+      ${!selected
+        ? '<div class="support-empty">Selecione um cliente para iniciar ou continuar o atendimento.</div>'
+        : messages.length===0
+          ? '<div class="support-empty">Envie a primeira mensagem desta conversa.</div>'
+          : messages.map(m=>{
+              const own=String(m.senderId)===String(state.user.id);
+              return `<div class="support-row ${own?"own":""}">
+                <div class="support-bubble ${own?"own":""}">
+                  <div>${esc(m.body)}</div>
+                  <small>${new Date(m.createdAt).toLocaleString("pt-BR")}</small>
+                </div>
+              </div>`;
+            }).join("")
+      }
+    </div>
+
+    <form id="supportComposer" class="support-composer">
+      <textarea id="supportBody" maxlength="4000" placeholder="Escreva sua mensagem..." ${selected?"":"disabled"}></textarea>
+      <button class="support-send" type="submit" ${selected?"":"disabled"}>
+        <span class="support-send-icon">➤</span>
+        Enviar mensagem
+      </button>
+    </form>
+  `;
+
+  $("#supportConversationSelect")?.addEventListener("change",async e=>{
+    supportSelectedUserId=e.target.value;
+    await renderSupportChat();
+  });
+
+  $("#supportComposer")?.addEventListener("submit",async e=>{
+    e.preventDefault();
+    if(!supportSelectedUserId)return;
+    const body=$("#supportBody").value.trim();
+    if(!body)return;
+    const btn=e.currentTarget.querySelector("button");
+    btn.disabled=true;
+    try{
+      await api("/internal-chat/messages/"+supportSelectedUserId,{method:"POST",body:JSON.stringify({body})});
+      $("#supportBody").value="";
+      const list=await api("/internal-chat/contacts");
+      if(Array.isArray(list)) supportContacts=list;
+      await renderSupportChat();
+      await refreshSupportUnread();
+    }finally{
+      if(btn)btn.disabled=false;
+    }
+  });
+
+  const msgBox=$("#supportMessages");
+  if(msgBox) msgBox.scrollTop=msgBox.scrollHeight;
+  if(!silent) refreshSupportUnread();
+}
+
+$("#chatBtn").onclick=openSupportChat;
+$("#chatClose").onclick=closeSupportChat;
+$("#chatBackdrop").onclick=closeSupportChat;
 $("#settingsClose").onclick=closeSettings;
 $("#settingsBackdrop").onclick=closeSettings;
 
@@ -728,5 +885,7 @@ function initApp(){
   applySidebarState();
   renderMenu();
   loadPage();
+  refreshSupportUnread();
+  setInterval(refreshSupportUnread,10000);
 }
 if(state.token){loginView(false);initApp()} else loginView(true);
