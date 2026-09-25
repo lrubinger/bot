@@ -569,18 +569,64 @@ function closeSettings(){
 }
 $("#settingsBtn").onclick=openSettings;
 let supportChatTimer=null;
-let supportSelectedUserId="";
-let supportContacts=[];
+let supportSelectedChatId="";
+let supportChats=[];
 
 function isSupportMaster(){
   return Boolean(state.user?.super) || String(state.user?.email||"").toLowerCase()==="admin@portoplan.com.br";
+}
+
+function supportTitleForUser(userId){
+  return `PORTOPLAN_SUPPORT:${userId}`;
+}
+
+function supportUnreadCount(chat){
+  const row=(chat.users||[]).find(x=>String(x.userId)===String(state.user?.id));
+  return Number(row?.unreads||0);
+}
+
+function supportLabel(chat){
+  const owner=chat.owner||{};
+  const company=owner.company?.name||"";
+  if(isSupportMaster()){
+    return `${company||owner.name||"Cliente"} — ${owner.email||""}`;
+  }
+  return "Suporte PortoPlan";
+}
+
+async function ensureClientSupportChat(){
+  if(isSupportMaster()) return;
+  const data=await api("/chats?pageNumber=1");
+  const records=Array.isArray(data)?data:(data?.records||[]);
+  let chat=records.find(x=>String(x.title||"")===supportTitleForUser(state.user.id));
+  if(!chat){
+    chat=await api("/chats",{
+      method:"POST",
+      body:JSON.stringify({
+        title:supportTitleForUser(state.user.id),
+        users:[]
+      })
+    });
+  }
+  return chat;
+}
+
+async function loadSupportChats(){
+  if(isSupportMaster()){
+    const data=await api("/chats?pageNumber=1");
+    const records=Array.isArray(data)?data:(data?.records||[]);
+    supportChats=records.filter(x=>String(x.title||"").startsWith("PORTOPLAN_SUPPORT:"));
+  }else{
+    const chat=await ensureClientSupportChat();
+    supportChats=chat?[chat]:[];
+  }
 }
 
 function openSupportChat(){
   $("#chatDrawer").classList.add("open");
   $("#chatDrawer").setAttribute("aria-hidden","false");
   $("#chatBackdrop").classList.remove("hidden");
-  $("#chatDrawerSubtitle").textContent=isSupportMaster()?"Atendimento individual dos clientes":"Conversa interna da empresa + PortoPlan";
+  $("#chatDrawerSubtitle").textContent=isSupportMaster()?"Atendimento individual dos clientes":"Conversa direta com a equipe PortoPlan";
   loadSupportChat();
   clearInterval(supportChatTimer);
   supportChatTimer=setInterval(()=>refreshSupportChat(false),10000);
@@ -595,8 +641,8 @@ function closeSupportChat(){
 
 async function refreshSupportUnread(){
   try{
-    const data=await api("/internal-chat/unread");
-    const count=Number(data?.count||0);
+    await loadSupportChats();
+    const count=supportChats.reduce((sum,chat)=>sum+supportUnreadCount(chat),0);
     const badge=$("#chatBadge");
     if(badge){
       badge.textContent=String(count);
@@ -610,17 +656,13 @@ async function loadSupportChat(){
   const box=$("#chatDrawerContent");
   box.innerHTML='<div class="drawer-loading">Carregando conversas...</div>';
   try{
-    supportContacts=await api("/internal-chat/contacts");
-    if(!Array.isArray(supportContacts)) supportContacts=[];
+    await loadSupportChats();
 
-    if(isSupportMaster()){
-      if(!supportSelectedUserId && supportContacts.length){
-        supportSelectedUserId=String(supportContacts[0].id);
-      }
-    }else{
-      const master=supportContacts.find(u=>u.super || String(u.email||"").toLowerCase()==="admin@portoplan.com.br");
-      if(master) supportSelectedUserId=String(master.id);
-      else if(!supportSelectedUserId && supportContacts.length) supportSelectedUserId=String(supportContacts[0].id);
+    if(!supportSelectedChatId && supportChats.length){
+      supportSelectedChatId=String(supportChats[0].id);
+    }
+    if(!supportChats.some(x=>String(x.id)===String(supportSelectedChatId))){
+      supportSelectedChatId=supportChats.length?String(supportChats[0].id):"";
     }
 
     await renderSupportChat();
@@ -629,13 +671,10 @@ async function loadSupportChat(){
   }
 }
 
-async function refreshSupportChat(reloadContacts=true){
+async function refreshSupportChat(reloadChats=true){
   if($("#chatDrawer").getAttribute("aria-hidden")==="true") return;
   try{
-    if(reloadContacts){
-      const list=await api("/internal-chat/contacts");
-      if(Array.isArray(list)) supportContacts=list;
-    }
+    if(reloadChats) await loadSupportChats();
     await renderSupportChat(true);
   }catch(_){}
   refreshSupportUnread();
@@ -644,36 +683,47 @@ async function refreshSupportChat(reloadContacts=true){
 async function renderSupportChat(silent=false){
   const box=$("#chatDrawerContent");
   const master=isSupportMaster();
-  const selected=supportContacts.find(u=>String(u.id)===String(supportSelectedUserId));
+  const selected=supportChats.find(x=>String(x.id)===String(supportSelectedChatId));
 
   let messages=[];
   if(selected){
-    messages=await api("/internal-chat/messages/"+selected.id);
+    const data=await api("/chats/"+selected.id+"/messages?pageNumber=1");
+    messages=Array.isArray(data)?data:(data?.records||[]);
+    try{
+      await api("/chats/"+selected.id+"/read",{
+        method:"POST",
+        body:JSON.stringify({userId:state.user.id})
+      });
+    }catch(_){}
   }
 
   box.innerHTML=`
-    <div class="support-selector-wrap">
-      <select id="supportConversationSelect" class="support-selector" aria-label="${master?"Selecionar cliente":"Selecionar conversa"}">
-        <option value="">${master?"Selecione um cliente":"Selecione uma conversa"}</option>
-        ${supportContacts.map(c=>`
-          <option value="${c.id}" ${String(c.id)===String(supportSelectedUserId)?"selected":""}>
-            ${c.super || String(c.email||"").toLowerCase()==="admin@portoplan.com.br"
-              ? `PortoPlan — ${esc(c.name)}`
-              : `${esc(c.name)} — ${esc(c.company?.name||c.email||"")}`}${c.unread?` (${c.unread} nova${c.unread>1?"s":""})`:""}
-          </option>`).join("")}
-      </select>
-    </div>
+    ${master?`
+      <div class="support-selector-wrap">
+        <select id="supportConversationSelect" class="support-selector" aria-label="Selecionar cliente">
+          <option value="">Selecione um cliente</option>
+          ${supportChats.map(chat=>`
+            <option value="${chat.id}" ${String(chat.id)===String(supportSelectedChatId)?"selected":""}>
+              ${esc(supportLabel(chat))}${supportUnreadCount(chat)?` (${supportUnreadCount(chat)} nova${supportUnreadCount(chat)>1?"s":""})`:""}
+            </option>`).join("")}
+        </select>
+      </div>`:
+      `<div class="support-peer">
+        <b>Suporte PortoPlan</b>
+        <span>Conversa direta com a equipe PortoPlan</span>
+      </div>`
+    }
 
     <div id="supportMessages" class="support-messages">
       ${!selected
-        ? '<div class="support-empty">Selecione um cliente para iniciar ou continuar o atendimento.</div>'
+        ? '<div class="support-empty">Nenhuma conversa disponível.</div>'
         : messages.length===0
           ? '<div class="support-empty">Envie a primeira mensagem desta conversa.</div>'
           : messages.map(m=>{
               const own=String(m.senderId)===String(state.user.id);
               return `<div class="support-row ${own?"own":""}">
                 <div class="support-bubble ${own?"own":""}">
-                  <div>${esc(m.body)}</div>
+                  <div>${esc(m.message||"")}</div>
                   <small>${new Date(m.createdAt).toLocaleString("pt-BR")}</small>
                 </div>
               </div>`;
@@ -691,22 +741,24 @@ async function renderSupportChat(silent=false){
   `;
 
   $("#supportConversationSelect")?.addEventListener("change",async e=>{
-    supportSelectedUserId=e.target.value;
+    supportSelectedChatId=e.target.value;
     await renderSupportChat();
   });
 
   $("#supportComposer")?.addEventListener("submit",async e=>{
     e.preventDefault();
-    if(!supportSelectedUserId)return;
+    if(!supportSelectedChatId)return;
     const body=$("#supportBody").value.trim();
     if(!body)return;
     const btn=e.currentTarget.querySelector("button");
     btn.disabled=true;
     try{
-      await api("/internal-chat/messages/"+supportSelectedUserId,{method:"POST",body:JSON.stringify({body})});
+      await api("/chats/"+supportSelectedChatId+"/messages",{
+        method:"POST",
+        body:JSON.stringify({message:body})
+      });
       $("#supportBody").value="";
-      const list=await api("/internal-chat/contacts");
-      if(Array.isArray(list)) supportContacts=list;
+      await loadSupportChats();
       await renderSupportChat();
       await refreshSupportUnread();
     }finally{
