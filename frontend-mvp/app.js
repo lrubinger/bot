@@ -564,17 +564,29 @@ $("#settingsBackdrop").onclick=closeSettings;
 async function loadSettings(selectedId){
   const box=$("#settingsContent");
   box.innerHTML='<div class="drawer-loading">Carregando configurações...</div>';
+
   try{
-    const rawUsers=await api("/users/profile/list");
-    const users=Array.isArray(rawUsers)?rawUsers:(rawUsers?.users||[]);
+    const users=await api("/auth/settings/users");
     const selected=String(selectedId || state.user?.id || users[0]?.id || "");
-    const profile=selected ? await api("/users/profile/"+selected) : (state.user||{});
-    const rawConnections=await api("/whatsapp/profile/connections");
-    const connections=Array.isArray(rawConnections)?rawConnections:(rawConnections?.whatsapps||rawConnections?.connections||[]);
-    const canChoose=users.length>1;
+    const profile=await api("/auth/settings/profile/"+selected);
+    let connections=[];
+    try{
+      const rawConnections=await api("/whatsapp/profile/connections");
+      connections=Array.isArray(rawConnections)?rawConnections:(rawConnections?.whatsapps||rawConnections?.connections||[]);
+    }catch(_){}
+
+    const canChoose=Array.isArray(users) && users.length>1;
+    const canChangeProfile=Boolean(state.user?.super) || String(state.user?.email||"").toLowerCase()==="admin@portoplan.com.br";
 
     box.innerHTML=`
-      ${canChoose?`<div class="settings-section"><label class="field-label">Usuário</label><select id="settingsUserSelect" class="settings-select">${users.map(u=>`<option value="${u.id}" ${String(u.id)===selected?"selected":""}>${esc(u.name)} · ${esc(u.company?.name||"")}</option>`).join("")}</select></div>`:""}
+      ${canChoose?`
+        <div class="settings-section">
+          <label class="field-label">Usuário</label>
+          <select id="settingsUserSelect" class="settings-select">
+            ${users.map(u=>`<option value="${u.id}" ${String(u.id)===selected?"selected":""}>${esc(u.name)} · ${esc(u.company?.name||u.email||"")}</option>`).join("")}
+          </select>
+        </div>`:""}
+
       <form id="profileForm">
         <div class="settings-section">
           <h3>Dados do usuário</h3>
@@ -583,14 +595,25 @@ async function loadSettings(selectedId){
             <label><span>E-mail</span><input id="profileEmail" type="email" value="${esc(profile.email||"")}" /></label>
             <label><span>Telefone</span><input id="profilePhone" value="${esc(profile.phone||"")}" /></label>
             <label class="full"><span>Endereço</span><input id="profileAddress" value="${esc(profile.address||"")}" /></label>
+            ${canChangeProfile?`
+              <label><span>Nível de acesso</span>
+                <select id="profileAccess" class="settings-select">
+                  <option value="user" ${profile.profile==="user"?"selected":""}>Usuário</option>
+                  <option value="admin" ${profile.profile==="admin"?"selected":""}>Administrador</option>
+                </select>
+              </label>`:""}
             <label class="full"><span>Nova senha</span><input id="profilePassword" type="password" placeholder="Preencha apenas para alterar" /></label>
           </div>
-          <div class="settings-actions"><button class="primary" type="submit">Salvar alterações</button><span id="profileSaveStatus" class="small"></span></div>
+          <div class="settings-actions">
+            <button class="primary" type="submit">Salvar alterações</button>
+            <span id="profileSaveStatus" class="small"></span>
+          </div>
         </div>
       </form>
+
       <div class="settings-section">
         <h3>Conexão WhatsApp</h3>
-        <p class="settings-help">Conexão pelo QR Code nativo do Chatbot PortoPlan.</p>
+        <p class="settings-help">A conexão continua pelo QR Code nativo do Chatbot PortoPlan.</p>
         <div class="settings-connections">
           ${connections.length?connections.map(w=>`
             <div class="connection-card">
@@ -600,26 +623,49 @@ async function loadSettings(selectedId){
                 <button class="ghost settings-qr" data-id="${w.id}" type="button">QR Code</button>
                 <button class="ghost settings-disconnect" data-id="${w.id}" type="button">Desconectar</button>
               </div>
-            </div>`).join(""):'<div class="empty-state">Nenhuma conexão vinculada a este usuário.</div>'}
+            </div>`).join(""):'<div class="empty-state">Nenhuma conexão vinculada.</div>'}
         </div>
-      </div>`;
+      </div>
+    `;
 
     $("#settingsUserSelect")?.addEventListener("change",e=>loadSettings(e.target.value));
+
     $("#profileForm").onsubmit=async e=>{
       e.preventDefault();
-      const payload={name:$("#profileName").value.trim(),email:$("#profileEmail").value.trim(),phone:$("#profilePhone").value.trim(),address:$("#profileAddress").value.trim()};
+
+      const payload={
+        name:$("#profileName").value.trim(),
+        email:$("#profileEmail").value.trim(),
+        phone:$("#profilePhone").value.trim(),
+        address:$("#profileAddress").value.trim()
+      };
+
       const password=$("#profilePassword").value;
       if(password) payload.password=password;
-      await api("/users/profile/"+selected,{method:"PUT",body:JSON.stringify(payload)});
+
+      if(canChangeProfile && $("#profileAccess")){
+        payload.profile=$("#profileAccess").value;
+      }
+
+      const updated=await api("/auth/settings/profile/"+selected,{
+        method:"PUT",
+        body:JSON.stringify(payload)
+      });
+
       $("#profileSaveStatus").textContent="Dados salvos.";
+
       if(String(state.user?.id)===selected){
-        state.user={...state.user,...payload}; delete state.user.password;
+        state.user={...state.user,...updated};
         localStorage.setItem("pp_user",JSON.stringify(state.user));
         $("#userLine").textContent=`${state.user.name||""} · ${state.user.email||""}`;
       }
     };
+
     document.querySelectorAll(".settings-qr").forEach(b=>b.onclick=()=>showProfileQr(b.dataset.id));
-    document.querySelectorAll(".settings-disconnect").forEach(b=>b.onclick=async()=>{await api("/whatsapp/profile/connections/"+b.dataset.id+"/disconnect",{method:"DELETE"});loadSettings(selected);});
+    document.querySelectorAll(".settings-disconnect").forEach(b=>b.onclick=async()=>{
+      await api("/whatsapp/profile/connections/"+b.dataset.id+"/disconnect",{method:"DELETE"});
+      loadSettings(selected);
+    });
   }catch(err){
     box.innerHTML=`<div class="error">Não foi possível carregar as configurações: ${esc(err.message)}</div>`;
   }
