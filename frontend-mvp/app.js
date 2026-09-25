@@ -51,16 +51,52 @@ function menuIcon(name){
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
-async function api(path, options={}) {
+let refreshPromise = null;
+
+async function refreshSession(){
+  if(refreshPromise) return refreshPromise;
+  refreshPromise=(async()=>{
+    try{
+      const res=await fetch(API+"/auth/refresh_token",{
+        method:"POST",
+        credentials:"include",
+        headers:{"Content-Type":"application/json"},
+        body:"{}"
+      });
+      const text=await res.text();
+      let data=null; try{data=text?JSON.parse(text):null}catch{data=text}
+      if(!res.ok || !data?.token) throw new Error((data&&(data.error||data.message))||"Sessão expirada");
+      state.token=data.token;
+      if(data.user) state.user=data.user;
+      localStorage.setItem("pp_token",state.token);
+      if(state.user) localStorage.setItem("pp_user",JSON.stringify(state.user));
+      return true;
+    }catch(err){
+      logout();
+      throw err;
+    }finally{
+      refreshPromise=null;
+    }
+  })();
+  return refreshPromise;
+}
+
+async function api(path, options={}, retried=false) {
   const headers = { ...(options.headers||{}) };
   if (!(options.body instanceof FormData)) headers["Content-Type"] = headers["Content-Type"] || "application/json";
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
+
   const res = await fetch(API + path, { credentials:"include", ...options, headers });
-  if (res.status === 401) {
-    if (!path.includes("/auth/login")) logout();
-  }
   const text = await res.text();
   let data = null; try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+
+  const invalidToken = res.status===403 && String((data&&(data.error||data.message))||"").toLowerCase().includes("invalid token");
+  if((res.status===401 || invalidToken) && !retried && !path.includes("/auth/login") && !path.includes("/auth/refresh_token")){
+    await refreshSession();
+    return api(path,options,true);
+  }
+
+  if(res.status===401 && !path.includes("/auth/login")) logout();
   if (!res.ok) throw new Error((data && (data.error || data.message)) || `HTTP ${res.status}`);
   return data;
 }
@@ -336,10 +372,10 @@ async function openTicket(id){
 }
 async function kanban(){
   setTitle("Kanban");
-  let board=await api("/company-kanban");
+  let board=await api("/users/company-kanban");
   if(!board || !Array.isArray(board.columns)) board={columns:[]};
 
-  const save=async()=>api("/company-kanban",{method:"PUT",body:JSON.stringify(board)});
+  const save=async()=>api("/users/company-kanban",{method:"PUT",body:JSON.stringify(board)});
   const render=()=>{
     content(`
       <div class="kanban-toolbar">
@@ -529,11 +565,11 @@ async function loadSettings(selectedId){
   const box=$("#settingsContent");
   box.innerHTML='<div class="drawer-loading">Carregando configurações...</div>';
   try{
-    const rawUsers=await api("/profile/users");
+    const rawUsers=await api("/users/profile/list");
     const users=Array.isArray(rawUsers)?rawUsers:(rawUsers?.users||[]);
     const selected=String(selectedId || state.user?.id || users[0]?.id || "");
-    const profile=selected ? await api("/profile/users/"+selected) : (state.user||{});
-    const rawConnections=await api("/profile/connections");
+    const profile=selected ? await api("/users/profile/"+selected) : (state.user||{});
+    const rawConnections=await api("/whatsapp/profile/connections");
     const connections=Array.isArray(rawConnections)?rawConnections:(rawConnections?.whatsapps||rawConnections?.connections||[]);
     const canChoose=users.length>1;
 
@@ -574,7 +610,7 @@ async function loadSettings(selectedId){
       const payload={name:$("#profileName").value.trim(),email:$("#profileEmail").value.trim(),phone:$("#profilePhone").value.trim(),address:$("#profileAddress").value.trim()};
       const password=$("#profilePassword").value;
       if(password) payload.password=password;
-      await api("/profile/users/"+selected,{method:"PUT",body:JSON.stringify(payload)});
+      await api("/users/profile/"+selected,{method:"PUT",body:JSON.stringify(payload)});
       $("#profileSaveStatus").textContent="Dados salvos.";
       if(String(state.user?.id)===selected){
         state.user={...state.user,...payload}; delete state.user.password;
@@ -583,7 +619,7 @@ async function loadSettings(selectedId){
       }
     };
     document.querySelectorAll(".settings-qr").forEach(b=>b.onclick=()=>showProfileQr(b.dataset.id));
-    document.querySelectorAll(".settings-disconnect").forEach(b=>b.onclick=async()=>{await api("/profile/connections/"+b.dataset.id+"/disconnect",{method:"DELETE"});loadSettings(selected);});
+    document.querySelectorAll(".settings-disconnect").forEach(b=>b.onclick=async()=>{await api("/whatsapp/profile/connections/"+b.dataset.id+"/disconnect",{method:"DELETE"});loadSettings(selected);});
   }catch(err){
     box.innerHTML=`<div class="error">Não foi possível carregar as configurações: ${esc(err.message)}</div>`;
   }
@@ -600,7 +636,7 @@ async function showProfileQr(id){
   `);
   let stopped=false,lastQr="",qrBornAt=0;
 
-  const start=async()=>{ await api("/profile/connections/"+id+"/start",{method:"POST"}); };
+  const start=async()=>{ await api("/whatsapp/profile/connections/"+id+"/start",{method:"POST"}); };
   const render=value=>{
     if(!value||value===lastQr)return;
     lastQr=value; const box=$("#qr"); box.innerHTML="";
@@ -615,7 +651,7 @@ async function showProfileQr(id){
   const poll=async()=>{
     if(stopped||$("#modal").classList.contains("hidden"))return;
     try{
-      const list=await api("/profile/connections");
+      const list=await api("/whatsapp/profile/connections");
       const w=list.find(x=>String(x.id)===String(id));
       if(w){
         render(w.qrcode);
