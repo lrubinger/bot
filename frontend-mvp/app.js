@@ -51,6 +51,110 @@ function menuIcon(name){
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
+let metaSignupConfig = null;
+let metaSessionInfo = {};
+
+function ensureMetaSdk(config){
+  return new Promise((resolve,reject)=>{
+    if(!config?.enabled) return reject(new Error("Integração Meta ainda não configurada."));
+    if(window.FB){
+      FB.init({appId:config.appId,cookie:true,xfbml:false,version:config.graphVersion||"v25.0"});
+      return resolve();
+    }
+    const previous=window.fbAsyncInit;
+    window.fbAsyncInit=function(){
+      if(typeof previous==="function") previous();
+      FB.init({appId:config.appId,cookie:true,xfbml:false,version:config.graphVersion||"v25.0"});
+      resolve();
+    };
+    if(document.getElementById("facebook-jssdk")) return;
+    const js=document.createElement("script");
+    js.id="facebook-jssdk";
+    js.async=true;
+    js.defer=true;
+    js.crossOrigin="anonymous";
+    js.src="https://connect.facebook.net/pt_BR/sdk.js";
+    js.onerror=()=>reject(new Error("Não foi possível carregar o SDK da Meta."));
+    document.head.appendChild(js);
+  });
+}
+
+window.addEventListener("message",event=>{
+  if(!String(event.origin||"").includes("facebook.com")) return;
+  let payload=event.data;
+  try{ if(typeof payload==="string") payload=JSON.parse(payload); }catch(_){}
+  if(payload?.type!=="WA_EMBEDDED_SIGNUP") return;
+  const eventName=String(payload.event||"");
+  if(eventName.startsWith("FINISH")){
+    metaSessionInfo=payload.data||{};
+  }
+});
+
+async function startMetaSignup(){
+  const status=$("#metaConnectStatus");
+  try{
+    if(!metaSignupConfig?.enabled) throw new Error("A integração oficial da Meta ainda não está configurada.");
+    await ensureMetaSdk(metaSignupConfig);
+    if(status) status.textContent="Abrindo cadastro oficial da Meta...";
+    metaSessionInfo={};
+
+    FB.login(async response=>{
+      try{
+        const code=response?.authResponse?.code;
+        if(!code){
+          if(status) status.textContent="Conexão cancelada ou não autorizada.";
+          return;
+        }
+
+        if(status) status.textContent="Finalizando conexão com a Meta...";
+        const data=metaSessionInfo||{};
+        await api("/meta/whatsapp/complete",{
+          method:"POST",
+          body:JSON.stringify({
+            code,
+            wabaId:data.waba_id||data.wabaId||"",
+            phoneNumberId:data.phone_number_id||data.phoneNumberId||"",
+            businessId:data.business_id||data.businessId||""
+          })
+        });
+
+        if(status) status.textContent="WhatsApp conectado oficialmente pela Meta.";
+        setTimeout(()=>loadSettings(),700);
+      }catch(err){
+        if(status) status.textContent=err.message||"Falha ao finalizar a conexão.";
+      }
+    },{
+      config_id:metaSignupConfig.configId,
+      response_type:"code",
+      override_default_response_type:true,
+      extras:{
+        setup:{},
+        featureType:"whatsapp_business_app_onboarding"
+      }
+    });
+  }catch(err){
+    if(status) status.textContent=err.message||"Falha ao iniciar a conexão Meta.";
+  }
+}
+
+async function showWapiQr(connectionId){
+  modal(`<div class="qr-modal-head"><div class="eyebrow">CONEXÃO WHATSAPP</div><h2>Conectar meu WhatsApp</h2></div><p class="qr-instructions">No celular, abra o WhatsApp e acesse <b>Aparelhos conectados</b> → <b>Conectar um aparelho</b>. Depois escaneie o QR Code abaixo.</p><div id="qrStatus" class="qr-status">Gerando QR Code...</div><div id="qr" class="qr-box"><div class="qr-loading"></div></div><div class="qr-meta"><span id="qrHint">O QR Code será renovado automaticamente.</span><span id="qrCountdown"></span></div><button id="qrRestart" class="ghost qr-restart" type="button">Gerar novo QR Code</button>`);
+  let stopped=false; let born=Date.now();
+  const renderQr=async()=>{
+    const data=await api("/wapi/connection/"+connectionId+"/qr");
+    const box=$("#qr");
+    if(data&&data.qrcode){box.innerHTML=`<img src="${data.qrcode}" alt="QR Code do WhatsApp" class="wapi-qr-image" />`;$("#qrStatus").textContent="QR Code pronto para leitura.";born=Date.now();}
+    else{box.innerHTML=`<div class="error">A W-API não retornou um QR Code.</div>`;$("#qrStatus").textContent="Não foi possível gerar o QR Code.";}
+  };
+  const checkStatus=async()=>{
+    if(stopped||$("#modal").classList.contains("hidden"))return;
+    try{const s=await api("/wapi/connection/"+connectionId+"/status");if(s.connected){stopped=true;$("#qrStatus").textContent="WhatsApp conectado com sucesso.";setTimeout(()=>{closeModal();loadSettings();},900);return;}}catch(err){$("#qrStatus").textContent=err.message;}
+    setTimeout(checkStatus,1800);
+  };
+  $("#qrRestart").onclick=async()=>{try{$("#qrStatus").textContent="Gerando novo QR Code...";await api("/wapi/connection/"+connectionId+"/restart",{method:"POST"});await renderQr();}catch(err){$("#qrStatus").textContent=err.message;}};
+  const timer=setInterval(()=>{if(stopped||$("#modal").classList.contains("hidden")){clearInterval(timer);return;}const left=Math.max(0,30-(Math.floor((Date.now()-born)/1000)%30));const el=$("#qrCountdown");if(el)el.textContent="Atualização em ~"+left+"s";},1000);
+  try{await renderQr();setTimeout(checkStatus,700);}catch(err){$("#qrStatus").textContent=err.message||"Falha ao gerar QR Code.";$("#qr").innerHTML=`<div class="error">Verifique a instância e o token da W-API.</div>`;}
+}
 async function api(path, options={}) {
   const headers = { ...(options.headers||{}) };
   if (!(options.body instanceof FormData)) headers["Content-Type"] = headers["Content-Type"] || "application/json";
@@ -91,19 +195,12 @@ $("#loginForm").onsubmit = async e => {
 
 function renderMenu(){
   $("#menu").innerHTML = '<div class="menu-title">MVP em teste</div>' +
-    activeItems.map(([id,label,icon])=>`<button type="button" class="menu-item ${state.page===id?"active":""}" data-page="${id}" title="${label}">${menuIcon(icon)}<span class="menu-label">${label}</span></button>`).join("") +
+    activeItems.map(([id,label,icon])=>`<div class="menu-item ${state.page===id?"active":""}" data-page="${id}" title="${label}">${menuIcon(icon)}<span class="menu-label">${label}</span></div>`).join("") +
     '<div class="menu-title">Próximas etapas</div>' +
     pendingItems.map(([label,icon])=>`<div class="menu-item pending" title="${label}">${menuIcon(icon)}<span class="menu-label">${label}</span><span class="badge">Em Breve</span></div>`).join("");
+  document.querySelectorAll("[data-page]").forEach(el=>el.onclick=()=>navigate(el.dataset.page));
 }
-$("#menu").addEventListener("click",e=>{
-  const item=e.target.closest("[data-page]");
-  if(item) navigate(item.dataset.page);
-});
-function navigate(page){
-  state.page=page;
-  renderMenu();
-  loadPage();
-}
+function navigate(page){state.page=page;renderMenu();loadPage();}
 function setTitle(t){
   $("#pageTitle").textContent=t;
   const browserTitle = t === "Dashboard" ? "Bot" : t;
@@ -526,21 +623,14 @@ $("#settingsBackdrop").onclick=closeSettings;
 async function loadSettings(selectedId){
   const box=$("#settingsContent");
   box.innerHTML='<div class="drawer-loading">Carregando configurações...</div>';
-
-  const callFirst=async(paths,options)=>{
-    let lastError=null;
-    for(const path of paths){
-      try{return await api(path,options)}catch(err){lastError=err}
-    }
-    throw lastError||new Error("Não foi possível carregar os dados.");
-  };
-
   try{
-    const users=await callFirst(["/users/profile/list","/profile/users"]);
+    const users=await api("/profile/users");
     const selected=String(selectedId || state.user?.id || users[0]?.id || "");
-    const profile=await callFirst(["/users/profile/"+selected,"/profile/users/"+selected]);
-    const connections=await callFirst(["/whatsapp/profile/connections","/profile/connections"]);
-    const canChoose=Array.isArray(users) && users.length>1;
+    const profile=await api("/profile/users/"+selected);
+    const connections=await api("/profile/connections");
+    let wapiConfig={enabled:false,canAutoCreate:false};
+    try{ wapiConfig=await api("/wapi/config"); }catch(_){}
+    const canChoose=users.length>1;
 
     box.innerHTML=`
       ${canChoose?`<div class="settings-section"><label class="field-label">Usuário</label><select id="settingsUserSelect" class="settings-select">${users.map(u=>`<option value="${u.id}" ${String(u.id)===selected?"selected":""}>${esc(u.name)} · ${esc(u.company?.name||"")}</option>`).join("")}</select></div>`:""}
@@ -558,24 +648,54 @@ async function loadSettings(selectedId){
         </div>
       </form>
       <div class="settings-section">
-        <h3>Conexão WhatsApp</h3>
-        <p class="settings-help">${canChoose?"Como administrador PortoPlan, você visualiza as conexões disponíveis.":"Aqui aparece a conexão vinculada ao seu usuário."}</p>
+        <h3>Conexão WhatsApp por QR Code</h3>
+        <p class="settings-help">O Chatbot PortoPlan usa a W-API para vincular o WhatsApp por QR Code. O token da instância fica protegido no servidor.</p>
+        ${wapiConfig.canAutoCreate
+          ? `<button id="wapiCreateBtn" class="primary" type="button">Criar conexão e gerar QR Code</button><span id="wapiConnectStatus" class="small"></span>`
+          : `<div class="settings-grid"><label class="full"><span>Instance ID da W-API</span><input id="wapiInstanceId" placeholder="Ex.: T34398-VYR3QD-MS29SL" /></label><label class="full"><span>Token da instância</span><input id="wapiToken" type="password" placeholder="Token da W-API" /></label></div><div class="settings-actions"><button id="wapiLinkBtn" class="primary" type="button">Vincular instância</button><span id="wapiConnectStatus" class="small"></span></div>`}
+      </div>
+      <div class="settings-section">
+        <h3>Conexões cadastradas</h3>
+        <p class="settings-help">${canChoose?"Como administrador PortoPlan, você visualiza todas as conexões.":"Aqui aparece somente a conexão vinculada ao seu usuário."}</p>
         <div class="settings-connections">
           ${connections.length?connections.map(w=>`
             <div class="connection-card">
-              <div><b>${esc(w.name||"WhatsApp")}</b><span>${esc(w.company?.name||"")}</span></div>
+              <div>
+                <b>${esc(w.name||"WhatsApp")}</b>
+                <span>${esc(w.company?.name||"")}</span>
+              </div>
               <span class="connection-status ${String(w.status||"").toLowerCase()}">${esc(w.status||"DISCONNECTED")}</span>
               <div class="connection-actions">
-                <button class="ghost settings-qr" data-id="${w.id}" type="button">QR Code</button>
-                <button class="ghost settings-disconnect" data-id="${w.id}" type="button">Desconectar</button>
+                ${w.provider==="w-api"
+                  ? `<button class="ghost settings-wapi-qr" data-id="${w.id}" type="button">QR Code</button>
+                     <button class="ghost settings-wapi-disconnect" data-id="${w.id}" type="button">Desconectar</button>`
+                  : `<span class="pill">Conexão legada</span><button class="ghost settings-qr" data-id="${w.id}" type="button">QR Code legado</button>`}
               </div>
-            </div>`).join(""):'<div class="empty-state">Nenhuma conexão vinculada.</div>'}
+            </div>`).join(""):'<div class="empty-state">Nenhuma conexão vinculada a este usuário.</div>'}
         </div>
       </div>
     `;
 
+    $("#wapiCreateBtn")?.addEventListener("click",async()=>{
+      const status=$("#wapiConnectStatus");
+      try{
+        status.textContent="Criando instância...";
+        const created=await api("/wapi/connection/create",{method:"POST",body:JSON.stringify({name:"PortoPlan WhatsApp"})});
+        status.textContent="Instância criada."; await showWapiQr(created.id);
+      }catch(err){status.textContent=err.message;}
+    });
+    $("#wapiLinkBtn")?.addEventListener("click",async()=>{
+      const status=$("#wapiConnectStatus");
+      try{
+        const instanceId=$("#wapiInstanceId").value.trim();
+        const token=$("#wapiToken").value.trim();
+        if(!instanceId||!token){status.textContent="Informe Instance ID e Token.";return;}
+        status.textContent="Validando instância...";
+        const linked=await api("/wapi/connection/link",{method:"POST",body:JSON.stringify({instanceId,token,name:"PortoPlan WhatsApp"})});
+        status.textContent="Instância vinculada."; await showWapiQr(linked.id);
+      }catch(err){status.textContent=err.message;}
+    });
     $("#settingsUserSelect")?.addEventListener("change",e=>loadSettings(e.target.value));
-
     $("#profileForm").onsubmit=async e=>{
       e.preventDefault();
       const payload={
@@ -586,13 +706,8 @@ async function loadSettings(selectedId){
       };
       const password=$("#profilePassword").value;
       if(password) payload.password=password;
-
-      await callFirst(
-        ["/users/profile/"+selected,"/profile/users/"+selected],
-        {method:"PUT",body:JSON.stringify(payload)}
-      );
+      await api("/profile/users/"+selected,{method:"PUT",body:JSON.stringify(payload)});
       $("#profileSaveStatus").textContent="Dados salvos.";
-
       if(String(state.user?.id)===selected){
         state.user={...state.user,...payload};
         delete state.user.password;
@@ -601,18 +716,21 @@ async function loadSettings(selectedId){
       }
     };
 
+    document.querySelectorAll(".settings-wapi-qr").forEach(b=>b.onclick=()=>showWapiQr(b.dataset.id));
+    document.querySelectorAll(".settings-wapi-disconnect").forEach(b=>b.onclick=async()=>{
+      await api("/wapi/connection/"+b.dataset.id,{method:"DELETE"});
+      loadSettings(selected);
+    });
     document.querySelectorAll(".settings-qr").forEach(b=>b.onclick=()=>showProfileQr(b.dataset.id));
     document.querySelectorAll(".settings-disconnect").forEach(b=>b.onclick=async()=>{
-      await callFirst([
-        "/whatsapp/profile/connections/"+b.dataset.id+"/disconnect",
-        "/profile/connections/"+b.dataset.id+"/disconnect"
-      ],{method:"DELETE"});
+      await api("/profile/connections/"+b.dataset.id+"/disconnect",{method:"DELETE"});
       loadSettings(selected);
     });
   }catch(err){
-    box.innerHTML=`<div class="error"><b>Não foi possível carregar as configurações.</b><br>${esc(err.message)}</div>`;
+    box.innerHTML=`<div class="error">${esc(err.message)}</div>`;
   }
 }
+
 async function showProfileQr(id){
   modal(`
     <div class="qr-modal-head"><div class="eyebrow">CONEXÃO WHATSAPP</div><h2>Conectar meu WhatsApp</h2></div>
@@ -624,10 +742,7 @@ async function showProfileQr(id){
   `);
   let stopped=false,lastQr="",qrBornAt=0;
 
-  const start=async()=>{
-    try{ await api("/whatsapp/profile/connections/"+id+"/start",{method:"POST"}); }
-    catch(_){ await api("/profile/connections/"+id+"/start",{method:"POST"}); }
-  };
+  const start=async()=>{ await api("/profile/connections/"+id+"/start",{method:"POST"}); };
   const render=value=>{
     if(!value||value===lastQr)return;
     lastQr=value; const box=$("#qr"); box.innerHTML="";
