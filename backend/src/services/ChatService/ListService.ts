@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import Chat from "../../models/Chat";
 import ChatUser from "../../models/ChatUser";
 import User from "../../models/User";
+import Company from "../../models/Company";
 
 interface Request {
   ownerId: number;
@@ -34,8 +35,8 @@ const ListService = async ({
       }
     },
     include: [
-      { model: User, as: "owner" },
-      { model: ChatUser, as: "users", include: [{ model: User, as: "user" }] }
+      { model: User, as: "owner", include: [{ model: Company, as: "company", attributes: ["id", "name"] }] },
+      { model: ChatUser, as: "users", include: [{ model: User, as: "user", include: [{ model: Company, as: "company", attributes: ["id", "name"] }] }] }
     ],
     limit,
     offset,
