@@ -13,7 +13,8 @@ interface UserData {
   companyId?: number;
   queueIds?: number[];
   whatsappId?: number;
-
+  phone?: string;
+  address?: string;
 }
 
 interface Request {
@@ -40,7 +41,7 @@ const UpdateUserService = async ({
 
   const requestUser = await User.findByPk(requestUserId);
 
-  if (requestUser.super === false && userData.companyId !== companyId) {
+  if (requestUser.super === false && user.companyId !== companyId) {
     throw new AppError("O usuário não pertence à esta empresa");
   }
 
@@ -51,7 +52,7 @@ const UpdateUserService = async ({
     password: Yup.string()
   });
 
-  const { email, password, profile, name, queueIds = [], whatsappId } = userData;
+  const { email, password, profile, name, queueIds = [], whatsappId, phone, address } = userData;
 
   try {
     await schema.validate({ email, password, profile, name });
@@ -65,7 +66,8 @@ const UpdateUserService = async ({
     profile,
     name,
     whatsappId: whatsappId || null,
-
+    phone,
+    address
   });
 
   await user.$set("queues", queueIds);
@@ -79,6 +81,8 @@ const UpdateUserService = async ({
     name: user.name,
     email: user.email,
     profile: user.profile,
+    phone: user.phone,
+    address: user.address,
     companyId: user.companyId,
     company,
     queues: user.queues
