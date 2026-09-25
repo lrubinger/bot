@@ -645,7 +645,8 @@ async function refreshSupportUnread(){
     const count=supportChats.reduce((sum,chat)=>sum+supportUnreadCount(chat),0);
     const badge=$("#chatBadge");
     if(badge){
-      badge.textContent=String(count);
+      badge.textContent="";
+      badge.setAttribute("aria-label",count>0 ? `${count} mensagem${count>1?"s":""} não lida${count>1?"s":""}` : "");
       badge.classList.toggle("hidden",count===0);
     }
     $("#chatBtn")?.classList.toggle("has-unread",count>0);
