@@ -501,15 +501,7 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
 
 /* Internal chat notification */
 .notification-button{position:relative}
-.notification-button:after{
-  content:"";
-  position:absolute;
-  width:7px;height:7px;
-  border-radius:50%;
-  background:var(--coral);
-  right:7px;top:6px;
-  box-shadow:0 0 0 2px #fff;
-}
+.notification-button:after{display:none}
 
 /* Internal chat */
 .internal-chat{
@@ -723,7 +715,18 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
   line-height:1;
   border:2px solid #fff;
 }
-.notification-button.has-unread:after{display:none}
+.notification-button.has-unread:after{
+  content:"";
+  display:block;
+  position:absolute;
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:var(--coral);
+  right:7px;
+  top:6px;
+  box-shadow:0 0 0 2px #fff;
+}
 
 .support-drawer{
   position:fixed;
