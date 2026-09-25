@@ -580,7 +580,7 @@ function openSupportChat(){
   $("#chatDrawer").classList.add("open");
   $("#chatDrawer").setAttribute("aria-hidden","false");
   $("#chatBackdrop").classList.remove("hidden");
-  $("#chatDrawerSubtitle").textContent=isSupportMaster()?"Atendimento individual dos clientes":"Conversa direta com a equipe PortoPlan";
+  $("#chatDrawerSubtitle").textContent=isSupportMaster()?"Atendimento individual dos clientes":"Conversa interna da empresa + PortoPlan";
   loadSupportChat();
   clearInterval(supportChatTimer);
   supportChatTimer=setInterval(()=>refreshSupportChat(false),10000);
