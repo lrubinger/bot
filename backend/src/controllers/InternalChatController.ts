@@ -3,6 +3,7 @@ import { Request, Response } from "express";
 import AppError from "../errors/AppError";
 import User from "../models/User";
 import Company from "../models/Company";
+import Setting from "../models/Setting";
 import InternalChatMessage from "../models/InternalChatMessage";
 
 const getRequester = async (req: Request): Promise<User> => {
@@ -20,6 +21,45 @@ const canTalk = (requester: User, target: User): boolean =>
   (isMaster(requester) ||
    isMaster(target) ||
    requester.companyId === target.companyId);
+
+const readKey = (requesterId: number, targetId: number) =>
+  `internalChatRead:${requesterId}:${targetId}`;
+
+const getReadAt = async (requester: User, targetId: number): Promise<Date | null> => {
+  const marker = await Setting.findOne({
+    where: {
+      companyId: requester.companyId,
+      key: readKey(requester.id, targetId)
+    }
+  });
+
+  if (!marker?.value) return null;
+  const date = new Date(marker.value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const markRead = async (requester: User, targetId: number): Promise<void> => {
+  const key = readKey(requester.id, targetId);
+  const value = new Date().toISOString();
+
+  const [marker] = await Setting.findOrCreate({
+    where: { companyId: requester.companyId, key },
+    defaults: { companyId: requester.companyId, key, value }
+  });
+
+  await marker.update({ value });
+};
+
+const unreadFrom = async (requester: User, senderId: number): Promise<number> => {
+  const readAt = await getReadAt(requester, senderId);
+  const where: any = {
+    senderId,
+    recipientId: requester.id
+  };
+  if (readAt) where.createdAt = { [Op.gt]: readAt };
+
+  return InternalChatMessage.count({ where });
+};
 
 export const contacts = async (req: Request, res: Response): Promise<Response> => {
   const requester = await getRequester(req);
@@ -43,14 +83,7 @@ export const contacts = async (req: Request, res: Response): Promise<Response> =
   });
 
   const result = await Promise.all(users.map(async user => {
-    const unread = await InternalChatMessage.count({
-      where: {
-        senderId: user.id,
-        recipientId: requester.id,
-        readAt: { [Op.is]: null }
-      }
-    });
-
+    const unread = await unreadFrom(requester, user.id);
     const last = await InternalChatMessage.findOne({
       where: {
         [Op.or]: [
@@ -83,13 +116,33 @@ export const contacts = async (req: Request, res: Response): Promise<Response> =
 
 export const unread = async (req: Request, res: Response): Promise<Response> => {
   const requester = await getRequester(req);
-  const count = await InternalChatMessage.count({
-    where: {
-      recipientId: requester.id,
-      readAt: { [Op.is]: null }
-    }
-  });
+  const contactsResult = await contactsData(requester);
+  const count = contactsResult.reduce((sum, item: any) => sum + Number(item.unread || 0), 0);
   return res.json({ count });
+};
+
+const contactsData = async (requester: User): Promise<any[]> => {
+  const where = isMaster(requester)
+    ? { id: { [Op.ne]: requester.id } }
+    : {
+        id: { [Op.ne]: requester.id },
+        [Op.or]: [
+          { companyId: requester.companyId },
+          { super: true },
+          { email: "admin@portoplan.com.br" }
+        ]
+      };
+
+  const users = await User.findAll({
+    where: where as any,
+    attributes: ["id", "name", "email", "companyId", "super"],
+    include: [{ model: Company, as: "company", attributes: ["id", "name"] }]
+  });
+
+  return Promise.all(users.map(async user => ({
+    ...(user.toJSON() as any),
+    unread: await unreadFrom(requester, user.id)
+  })));
 };
 
 export const messages = async (req: Request, res: Response): Promise<Response> => {
@@ -100,16 +153,7 @@ export const messages = async (req: Request, res: Response): Promise<Response> =
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
-  await InternalChatMessage.update(
-    { readAt: new Date() },
-    {
-      where: {
-        senderId: target.id,
-        recipientId: requester.id,
-        readAt: { [Op.is]: null }
-      }
-    }
-  );
+  await markRead(requester, target.id);
 
   const items = await InternalChatMessage.findAll({
     where: {
@@ -141,8 +185,7 @@ export const send = async (req: Request, res: Response): Promise<Response> => {
     senderId: requester.id,
     recipientId: target.id,
     companyId: requester.super ? target.companyId : requester.companyId,
-    body,
-    readAt: null
+    body
   } as any);
 
   return res.status(201).json(item);
