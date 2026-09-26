@@ -571,7 +571,6 @@ $("#settingsBtn").onclick=openSettings;
 let supportChatTimer=null;
 let supportSelectedUserId="";
 let supportContacts=[];
-let supportChatTimer=null;
 
 function isSupportMaster(){
   return Boolean(state.user?.super) || String(state.user?.email||"").toLowerCase()==="admin@portoplan.com.br";
