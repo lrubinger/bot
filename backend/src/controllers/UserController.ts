@@ -111,8 +111,7 @@ export const update = async (
   }
 
   const isMaster =
-    requester.super === true ||
-    String(requester.email || "").toLowerCase() === "admin@portoplan.com.br";
+    requester.super === true;
   const isSelf = +requestUserId === +userId;
   const sameCompany = requester.companyId === target.companyId;
 
