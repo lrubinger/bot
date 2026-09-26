@@ -91,7 +91,7 @@ export const update = async (req: Request, res: Response): Promise<Response> => 
   const requester = await getRequester(req);
   const targetId = req.params.userId ? +req.params.userId : requester.id;
 
-  if (!canAccessUser(requester, targetId)) {
+  if (!(await canAccessUser(requester, targetId))) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
