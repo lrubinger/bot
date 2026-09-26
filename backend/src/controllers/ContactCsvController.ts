@@ -1,7 +1,6 @@
 import fs from "fs";
 import { Request, Response } from "express";
 import * as XLSX from "xlsx";
-import { Op } from "sequelize";
 import Contact from "../models/Contact";
 import ContactCustomField from "../models/ContactCustomField";
 import AppError from "../errors/AppError";
@@ -149,15 +148,12 @@ export const exportCsv = async (req: Request, res: Response): Promise<Response> 
   const { companyId } = req.user;
 
   const contacts = await Contact.findAll({
-    where: {
-      companyId,
-      isGroup: { [Op.ne]: true }
-    },
+    where: { companyId },
     order: [["name", "ASC"]]
   });
 
   const rows = await Promise.all(
-    contacts.map(async contact => {
+    contacts.filter(contact => contact.isGroup !== true).map(async contact => {
       const row: any = {};
       GOOGLE_CONTACT_COLUMNS.forEach(column => {
         row[column] = "";
