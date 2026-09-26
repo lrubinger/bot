@@ -1068,7 +1068,8 @@ async function loadSettings(selectedId){
             email:$("#newUserEmail").value.trim(),
             phone:$("#newUserPhone").value.replace(/\D/g,""),
             password,
-            profile:"user"
+            profile:"user",
+            ...(isMaster ? { companyId: profile.companyId } : {})
           })
         });
         status.textContent="Usuário incluído.";
