@@ -49,7 +49,20 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     companyId
   });
 
-  return res.json({ contacts, count, hasMore });
+  const contactsWithCompany = await Promise.all(
+    contacts.map(async contact => {
+      const companyField = await ContactCustomField.findOne({
+        where: { contactId: contact.id, name: "Empresa" }
+      });
+
+      return {
+        ...(contact.toJSON() as any),
+        companyName: companyField?.value || ""
+      };
+    })
+  );
+
+  return res.json({ contacts: contactsWithCompany, count, hasMore });
 };
 
 export const getContact = async (
