@@ -13,8 +13,7 @@ const getRequester = async (req: Request): Promise<User> => {
 };
 
 const isMaster = (user: User): boolean =>
-  user.super === true ||
-  String(user.email || "").toLowerCase() === "admin@portoplan.com.br";
+  user.super === true;
 
 const canTalk = (requester: User, target: User): boolean =>
   requester.id !== target.id &&
