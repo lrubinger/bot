@@ -844,22 +844,45 @@ $("#chatBackdrop").onclick=closeSupportChat;
 $("#settingsClose").onclick=closeSettings;
 $("#settingsBackdrop").onclick=closeSettings;
 
+function formatPhoneBR(value){
+  const digits=String(value||"").replace(/\D/g,"").slice(0,11);
+  if(!digits)return "";
+  if(digits.length<=2)return digits.length===1?`(${digits}`:`(${digits})`;
+  const ddd=digits.slice(0,2);
+  const local=digits.slice(2);
+  if(digits.length<=10){
+    const first=local.slice(0,4);
+    const last=local.slice(4,8);
+    return `(${ddd}) ${first}${last?"-"+last:""}`;
+  }
+  const first=local.slice(0,5);
+  const last=local.slice(5,9);
+  return `(${ddd}) ${first}${last?"-"+last:""}`;
+}
+
+function formatCepBR(value){
+  const digits=String(value||"").replace(/\D/g,"").slice(0,8);
+  return digits.length>5?`${digits.slice(0,5)}-${digits.slice(5)}`:digits;
+}
+
 async function loadSettings(selectedId){
   const box=$("#settingsContent");
   box.innerHTML='<div class="drawer-loading">Carregando configurações...</div>';
 
   try{
-    const isMaster=Boolean(state.user?.super) || String(state.user?.email||"").toLowerCase()==="admin@portoplan.com.br";
+    const isMaster=Boolean(state.user?.super);
+    const isCompanyAdmin=isMaster || String(state.user?.profile||"").toLowerCase()==="admin";
 
     let users=[state.user];
-    if(isMaster){
-      const list=await api("/users?searchParam=&pageNumber=1");
-      users=Array.isArray(list)?list:(list?.users||[]);
+    if(isCompanyAdmin){
+      const list=await api("/users/profile/list");
+      users=Array.isArray(list)?list:[];
       if(!users.length) users=[state.user];
     }
 
     const selected=String(selectedId || state.user?.id || users[0]?.id || "");
-    const profile=await api("/users/"+selected);
+    const profile=await api("/users/profile/"+selected);
+    const ownProfile=String(state.user?.id)===selected;
 
     let connections=[];
     try{
@@ -867,8 +890,10 @@ async function loadSettings(selectedId){
       connections=Array.isArray(raw)?raw:[];
     }catch(_){}
 
+    const street=profile.addressStreet || (!profile.addressNumber && !profile.addressCity ? profile.address||"" : "");
+
     box.innerHTML=`
-      ${isMaster && users.length>1?`
+      ${isCompanyAdmin && users.length>1?`
         <div class="settings-section">
           <label class="field-label">Usuário</label>
           <select id="settingsUserSelect" class="settings-select">
@@ -880,25 +905,78 @@ async function loadSettings(selectedId){
         <div class="settings-section">
           <h3>Dados do usuário</h3>
           <div class="settings-grid">
-            <label><span>Nome</span><input id="profileName" value="${esc(profile.name||"")}" /></label>
-            <label><span>E-mail</span><input id="profileEmail" type="email" value="${esc(profile.email||"")}" /></label>
-            <label><span>Telefone</span><input id="profilePhone" value="${esc(profile.phone||"")}" /></label>
-            <label class="full"><span>Endereço</span><input id="profileAddress" value="${esc(profile.address||"")}" /></label>
-            ${isMaster?`
-              <label><span>Nível de acesso</span>
-                <select id="profileAccess" class="settings-select">
-                  <option value="user" ${profile.profile==="user"?"selected":""}>Usuário</option>
-                  <option value="admin" ${profile.profile==="admin"?"selected":""}>Administrador</option>
-                </select>
-              </label>`:""}
-            <label class="full"><span>Nova senha</span><input id="profilePassword" type="password" placeholder="Preencha apenas para alterar" /></label>
+            <label class="full"><span>Nome</span><input id="profileName" value="${esc(profile.name||"")}" /></label>
           </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Endereço completo</h3>
+          <div class="settings-grid address-grid">
+            <label class="full"><span>Endereço</span><input id="profileAddressStreet" value="${esc(street)}" /></label>
+            <label><span>Número</span><input id="profileAddressNumber" value="${esc(profile.addressNumber||"")}" /></label>
+            <label><span>Complemento</span><input id="profileAddressComplement" value="${esc(profile.addressComplement||"")}" /></label>
+            <label><span>Cidade</span><input id="profileAddressCity" value="${esc(profile.addressCity||"")}" /></label>
+            <label><span>Estado</span><input id="profileAddressState" maxlength="2" value="${esc(profile.addressState||"")}" /></label>
+            <label><span>CEP</span><input id="profileAddressZipCode" inputmode="numeric" value="${esc(formatCepBR(profile.addressZipCode||""))}" /></label>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Acesso</h3>
+          <div class="settings-grid">
+            <label><span>Telefone</span><input id="profilePhone" inputmode="tel" value="${esc(formatPhoneBR(profile.phone||""))}" /></label>
+            <label><span>E-mail de login</span><input id="profileEmail" type="email" value="${esc(profile.email||"")}" /></label>
+            <label><span>Senha atual</span><input id="profileCurrentPassword" type="password" autocomplete="current-password" /></label>
+            <label><span>Nova senha</span><input id="profilePassword" type="password" autocomplete="new-password" placeholder="Mínimo de 8 caracteres" /></label>
+          </div>
+          <p class="settings-help access-help">Para alterar e-mail ou senha, informe a senha atual.</p>
           <div class="settings-actions">
             <button class="primary" type="submit">Salvar alterações</button>
             <span id="profileSaveStatus" class="small"></span>
           </div>
         </div>
       </form>
+
+      ${isCompanyAdmin?`
+      <div class="settings-section">
+        <div class="people-head">
+          <div>
+            <h3>Pessoas e permissões</h3>
+            <p class="settings-help">Inclua usuários da sua empresa e gerencie quem pode acessar o Chatbot PortoPlan.</p>
+          </div>
+        </div>
+
+        <form id="newCompanyUserForm" class="people-add-card">
+          <strong>Incluir novo usuário</strong>
+          <div class="settings-grid people-add-grid">
+            <label><span>Nome</span><input id="newUserName" required /></label>
+            <label><span>E-mail</span><input id="newUserEmail" type="email" required /></label>
+            <label><span>Telefone</span><input id="newUserPhone" inputmode="tel" /></label>
+            <label><span>Senha inicial</span><input id="newUserPassword" type="password" minlength="8" required placeholder="Mínimo de 8 caracteres" /></label>
+          </div>
+          <div class="settings-actions">
+            <button class="primary" type="submit">+ Incluir usuário</button>
+            <span id="newUserStatus" class="small"></span>
+          </div>
+        </form>
+
+        <div class="people-list">
+          ${users.filter(u=>!profile.companyId || u.companyId===profile.companyId).map(u=>`
+            <div class="person-card">
+              <div class="person-main">
+                <div>
+                  <b>${esc(u.name||"Usuário")}</b>
+                  <span>${esc(u.email||"")}${u.phone?" · "+esc(formatPhoneBR(u.phone)):""}</span>
+                </div>
+                <span class="person-role">${u.super?"Superusuário":u.profile==="admin"?"Administrador":"Usuário"}</span>
+              </div>
+              <div class="person-actions">
+                <button type="button" class="ghost edit-company-user" data-id="${u.id}">Editar</button>
+                ${String(u.id)!==String(state.user?.id) && !u.super?`<button type="button" class="ghost danger remove-company-user" data-id="${u.id}" data-name="${esc(u.name||"usuário")}">Remover</button>`:""}
+              </div>
+            </div>`).join("")}
+        </div>
+      </div>`:""}
 
       <div class="settings-section">
         <h3>Conexão WhatsApp</h3>
@@ -918,30 +996,103 @@ async function loadSettings(selectedId){
 
     $("#settingsUserSelect")?.addEventListener("change",e=>loadSettings(e.target.value));
 
+    const phoneInput=$("#profilePhone");
+    if(phoneInput) phoneInput.addEventListener("input",e=>{e.target.value=formatPhoneBR(e.target.value);});
+    const newPhoneInput=$("#newUserPhone");
+    if(newPhoneInput) newPhoneInput.addEventListener("input",e=>{e.target.value=formatPhoneBR(e.target.value);});
+    const cepInput=$("#profileAddressZipCode");
+    if(cepInput) cepInput.addEventListener("input",e=>{e.target.value=formatCepBR(e.target.value);});
+    const stateInput=$("#profileAddressState");
+    if(stateInput) stateInput.addEventListener("input",e=>{e.target.value=e.target.value.replace(/[^A-Za-z]/g,"").toUpperCase().slice(0,2);});
+
     $("#profileForm").onsubmit=async e=>{
       e.preventDefault();
+      const status=$("#profileSaveStatus");
+      status.textContent="Salvando...";
+
+      const password=$("#profilePassword").value;
+      const currentPassword=$("#profileCurrentPassword").value;
+      if(password && password.length<8){
+        status.textContent="A nova senha deve ter no mínimo 8 caracteres.";
+        return;
+      }
+
       const payload={
         name:$("#profileName").value.trim(),
         email:$("#profileEmail").value.trim(),
-        phone:$("#profilePhone").value.trim(),
-        address:$("#profileAddress").value.trim()
+        phone:$("#profilePhone").value.replace(/\D/g,""),
+        currentPassword,
+        addressStreet:$("#profileAddressStreet").value.trim(),
+        addressNumber:$("#profileAddressNumber").value.trim(),
+        addressComplement:$("#profileAddressComplement").value.trim(),
+        addressCity:$("#profileAddressCity").value.trim(),
+        addressState:$("#profileAddressState").value.trim().toUpperCase(),
+        addressZipCode:$("#profileAddressZipCode").value.replace(/\D/g,"")
       };
-      const password=$("#profilePassword").value;
       if(password) payload.password=password;
-      if(isMaster && $("#profileAccess")) payload.profile=$("#profileAccess").value;
 
-      const updated=await api("/users/"+selected,{
-        method:"PUT",
-        body:JSON.stringify(payload)
-      });
+      try{
+        const updated=await api("/users/profile/"+selected,{
+          method:"PUT",
+          body:JSON.stringify(payload)
+        });
 
-      $("#profileSaveStatus").textContent="Dados salvos.";
-      if(String(state.user?.id)===selected){
-        state.user={...state.user,...updated,phone:payload.phone,address:payload.address};
-        localStorage.setItem("pp_user",JSON.stringify(state.user));
-        $("#userLine").textContent=`${state.user.name||""} · ${state.user.email||""}`;
+        status.textContent="Dados salvos.";
+        $("#profileCurrentPassword").value="";
+        $("#profilePassword").value="";
+
+        if(ownProfile){
+          state.user={...state.user,...updated};
+          localStorage.setItem("pp_user",JSON.stringify(state.user));
+          $("#userLine").textContent=`${state.user.name||""} · ${state.user.email||""}`;
+        }
+      }catch(err){
+        status.textContent=err.message||"Não foi possível salvar.";
       }
     };
+
+    $("#newCompanyUserForm")?.addEventListener("submit",async e=>{
+      e.preventDefault();
+      const status=$("#newUserStatus");
+      const password=$("#newUserPassword").value;
+      if(password.length<8){
+        status.textContent="A senha inicial deve ter no mínimo 8 caracteres.";
+        return;
+      }
+      status.textContent="Incluindo usuário...";
+      try{
+        await api("/users",{
+          method:"POST",
+          body:JSON.stringify({
+            name:$("#newUserName").value.trim(),
+            email:$("#newUserEmail").value.trim(),
+            phone:$("#newUserPhone").value.replace(/\D/g,""),
+            password,
+            profile:"user"
+          })
+        });
+        status.textContent="Usuário incluído.";
+        setTimeout(()=>loadSettings(selected),500);
+      }catch(err){
+        status.textContent=err.message||"Não foi possível incluir o usuário.";
+      }
+    });
+
+    document.querySelectorAll(".edit-company-user").forEach(btn=>{
+      btn.onclick=()=>loadSettings(btn.dataset.id);
+    });
+
+    document.querySelectorAll(".remove-company-user").forEach(btn=>{
+      btn.onclick=async()=>{
+        if(!confirm(`Remover ${btn.dataset.name} desta empresa?`))return;
+        try{
+          await api("/users/"+btn.dataset.id,{method:"DELETE"});
+          await loadSettings(ownProfile?state.user.id:selected);
+        }catch(err){
+          alert(err.message||"Não foi possível remover o usuário.");
+        }
+      };
+    });
 
     document.querySelectorAll(".settings-qr").forEach(b=>b.onclick=()=>showQr(b.dataset.id));
   }catch(err){
