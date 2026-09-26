@@ -344,8 +344,101 @@ async function showQr(id){
   setTimeout(poll,350);
 }
 async function contacts(){
-  setTitle("Contatos"); const data=await api("/contacts?pageNumber=1&searchParam=");
-  content(`<div class="table-wrap"><table><thead><tr><th>Nome</th><th>WhatsApp</th><th>E-mail</th></tr></thead><tbody>${(data.contacts||[]).map(c=>`<tr><td>${esc(c.name)}</td><td>${esc(c.number)}</td><td>${esc(c.email||"")}</td></tr>`).join("")}</tbody></table></div>`);
+  setTitle("Contatos");
+  const data=await api("/contacts?pageNumber=1&searchParam=");
+  const list=data.contacts||[];
+
+  content(`
+    <div class="toolbar">
+      <button class="primary" id="importContactsBtn">Importar contatos</button>
+      <button class="ghost" id="exportContactsBtn">Exportar contatos</button>
+      <input id="importContactsFile" type="file" accept=".csv,text/csv" class="hidden" />
+      <span id="contactsImportStatus" class="small"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Nome</th><th>Empresa</th><th>E-mail</th><th>Telefone</th></tr>
+        </thead>
+        <tbody>
+          ${list.map(c=>`
+            <tr>
+              <td>${esc(c.name)}</td>
+              <td>${esc(c.companyName||"")}</td>
+              <td>${esc(c.email||"")}</td>
+              <td>${esc(c.number||"")}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+  `);
+
+  $("#importContactsBtn").onclick=()=>$("#importContactsFile").click();
+
+  $("#importContactsFile").onchange=async e=>{
+    const file=e.target.files?.[0];
+    if(!file)return;
+
+    const status=$("#contactsImportStatus");
+    status.textContent="Importando contatos...";
+
+    try{
+      const form=new FormData();
+      form.append("file",file);
+      const result=await api("/contacts/import-csv",{method:"POST",body:form});
+      const details=[
+        `${result.created||0} novo${result.created===1?"":"s"}`,
+        `${result.updated||0} atualizado${result.updated===1?"":"s"}`
+      ];
+      if(result.ignored) details.push(`${result.ignored} ignorado${result.ignored===1?"":"s"}`);
+      status.textContent="Importação concluída: "+details.join(", ")+".";
+      e.target.value="";
+      setTimeout(()=>contacts(),900);
+    }catch(err){
+      status.textContent="Falha na importação: "+err.message;
+      e.target.value="";
+    }
+  };
+
+  $("#exportContactsBtn").onclick=async()=>{
+    const btn=$("#exportContactsBtn");
+    const status=$("#contactsImportStatus");
+    btn.disabled=true;
+    status.textContent="Preparando exportação...";
+
+    try{
+      const headers={};
+      if(state.token) headers.Authorization=`Bearer ${state.token}`;
+      let res=await fetch(API+"/contacts/export-csv",{credentials:"include",headers});
+
+      if(res.status===401 || res.status===403){
+        await refreshSession();
+        headers.Authorization=`Bearer ${state.token}`;
+        res=await fetch(API+"/contacts/export-csv",{credentials:"include",headers});
+      }
+
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const blob=await res.blob();
+      const url=URL.createObjectURL(blob);
+      const link=document.createElement("a");
+      link.href=url;
+
+      const disposition=res.headers.get("Content-Disposition")||"";
+      const match=disposition.match(/filename="?([^";]+)"?/i);
+      link.download=match?.[1]||"contatos-portoplan.csv";
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      status.textContent="Exportação concluída.";
+    }catch(err){
+      status.textContent="Falha na exportação: "+err.message;
+    }finally{
+      btn.disabled=false;
+    }
+  };
 }
 async function queues(){
   setTitle("Filas"); const list=await api("/queue");
