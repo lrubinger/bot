@@ -666,7 +666,7 @@ let supportSelectedUserId="";
 let supportContacts=[];
 
 function isSupportMaster(){
-  return Boolean(state.user?.super) || String(state.user?.email||"").toLowerCase()==="admin@portoplan.com.br";
+  return Boolean(state.user?.super);
 }
 
 function isSupportAgent(contact){
