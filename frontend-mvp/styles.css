@@ -892,3 +892,87 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
   .support-drawer{width:100vw}
   .support-header,.support-selector-wrap,.support-messages{padding-left:16px;padding-right:16px}
 }
+
+
+/* Profile access and company users */
+.access-help{
+  margin-top:12px;
+}
+.address-grid{
+  align-items:end;
+}
+.people-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+}
+.people-add-card{
+  background:#fff;
+  border:1px solid #d8deeb;
+  border-radius:14px;
+  padding:18px;
+  margin:12px 0 16px;
+}
+.people-add-card>strong{
+  display:block;
+  color:var(--navy);
+  margin-bottom:14px;
+  font-size:15px;
+}
+.people-list{
+  display:grid;
+  gap:12px;
+}
+.person-card{
+  background:#fff;
+  border:1px solid #d8deeb;
+  border-radius:13px;
+  padding:14px 15px;
+  display:grid;
+  gap:12px;
+}
+.person-main{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+}
+.person-main>div{
+  min-width:0;
+  display:grid;
+  gap:4px;
+}
+.person-main b{
+  color:var(--navy);
+}
+.person-main span:not(.person-role){
+  color:var(--muted);
+  font-size:12px;
+  overflow-wrap:anywhere;
+}
+.person-role{
+  flex:0 0 auto;
+  padding:5px 9px;
+  border-radius:999px;
+  background:#eef0ff;
+  color:var(--navy);
+  font-size:10px;
+  font-weight:800;
+  text-transform:uppercase;
+}
+.person-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.ghost.danger{
+  color:#b84949;
+  border-color:#e6bcbc;
+}
+.ghost.danger:hover{
+  background:#fff1f1;
+}
+@media(max-width:700px){
+  .person-main{flex-direction:column}
+}
