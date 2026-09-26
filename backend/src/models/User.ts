@@ -41,6 +41,24 @@ class User extends Model<User> {
 
   @Column(DataType.TEXT)
   address: string;
+
+  @Column
+  addressStreet: string;
+
+  @Column
+  addressNumber: string;
+
+  @Column
+  addressComplement: string;
+
+  @Column
+  addressCity: string;
+
+  @Column
+  addressState: string;
+
+  @Column
+  addressZipCode: string;
   
   @Column
   allTicket: string;
