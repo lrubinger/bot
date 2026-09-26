@@ -12,6 +12,12 @@ const publicAttributes = [
   "email",
   "phone",
   "address",
+  "addressStreet",
+  "addressNumber",
+  "addressComplement",
+  "addressCity",
+  "addressState",
+  "addressZipCode",
   "profile",
   "super",
   "companyId",
@@ -24,14 +30,19 @@ const getRequester = async (req: Request): Promise<User> => {
   return user;
 };
 
-const canAccessUser = (requester: User, targetId: number): boolean =>
-  requester.super === true || requester.id === targetId;
+const canAccessUser = async (requester: User, targetId: number): Promise<boolean> => {
+  if (requester.super === true || requester.id === targetId) return true;
+  if (requester.profile !== "admin") return false;
+
+  const target = await User.findByPk(targetId, { attributes: ["id", "companyId"] });
+  return Boolean(target && target.companyId === requester.companyId);
+};
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const requester = await getRequester(req);
   const targetId = req.params.userId ? +req.params.userId : requester.id;
 
-  if (!canAccessUser(requester, targetId)) {
+  if (!(await canAccessUser(requester, targetId))) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
@@ -50,21 +61,30 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
 export const list = async (req: Request, res: Response): Promise<Response> => {
   const requester = await getRequester(req);
 
-  if (!requester.super) {
-    const current = await User.findByPk(requester.id, {
+  if (requester.super) {
+    const users = await User.findAll({
       attributes: publicAttributes,
-      include: [{ model: Company, as: "company", attributes: ["id", "name"] }]
+      include: [{ model: Company, as: "company", attributes: ["id", "name"] }],
+      order: [["name", "ASC"]]
     });
-    return res.json([current]);
+    return res.json(users);
   }
 
-  const users = await User.findAll({
-    attributes: publicAttributes,
-    include: [{ model: Company, as: "company", attributes: ["id", "name"] }],
-    order: [["name", "ASC"]]
-  });
+  if (requester.profile === "admin") {
+    const users = await User.findAll({
+      where: { companyId: requester.companyId },
+      attributes: publicAttributes,
+      include: [{ model: Company, as: "company", attributes: ["id", "name"] }],
+      order: [["name", "ASC"]]
+    });
+    return res.json(users);
+  }
 
-  return res.json(users);
+  const current = await User.findByPk(requester.id, {
+    attributes: publicAttributes,
+    include: [{ model: Company, as: "company", attributes: ["id", "name"] }]
+  });
+  return res.json([current]);
 };
 
 export const update = async (req: Request, res: Response): Promise<Response> => {
@@ -78,14 +98,63 @@ export const update = async (req: Request, res: Response): Promise<Response> => 
   const user = await User.findByPk(targetId);
   if (!user) throw new AppError("ERR_NO_USER_FOUND", 404);
 
-  const { name, email, password, phone, address } = req.body;
+  const {
+    name,
+    email,
+    password,
+    currentPassword,
+    phone,
+    address,
+    addressStreet,
+    addressNumber,
+    addressComplement,
+    addressCity,
+    addressState,
+    addressZipCode
+  } = req.body;
+
+  const emailChanged = email !== undefined && email !== user.email;
+  const passwordChanged = Boolean(password);
+
+  if (emailChanged || passwordChanged) {
+    if (!currentPassword || !(await requester.checkPassword(String(currentPassword)))) {
+      throw new AppError("Senha atual inválida.", 403);
+    }
+  }
+
+  const normalizedPhone = phone !== undefined ? String(phone).replace(/\D/g, "") : undefined;
+  const normalizedZip = addressZipCode !== undefined ? String(addressZipCode).replace(/\D/g, "") : undefined;
+
+  const legacyAddress = [
+    addressStreet,
+    addressNumber,
+    addressComplement,
+    addressCity,
+    addressState,
+    normalizedZip
+  ].filter(value => value !== undefined && String(value).trim() !== "").join(", ");
 
   await user.update({
     ...(name !== undefined ? { name } : {}),
     ...(email !== undefined ? { email } : {}),
     ...(password ? { password } : {}),
-    ...(phone !== undefined ? { phone } : {}),
-    ...(address !== undefined ? { address } : {})
+    ...(normalizedPhone !== undefined ? { phone: normalizedPhone } : {}),
+    ...(addressStreet !== undefined ? { addressStreet } : {}),
+    ...(addressNumber !== undefined ? { addressNumber } : {}),
+    ...(addressComplement !== undefined ? { addressComplement } : {}),
+    ...(addressCity !== undefined ? { addressCity } : {}),
+    ...(addressState !== undefined ? { addressState: String(addressState).toUpperCase().slice(0, 2) } : {}),
+    ...(normalizedZip !== undefined ? { addressZipCode: normalizedZip } : {}),
+    ...(address !== undefined
+      ? { address }
+      : (addressStreet !== undefined ||
+         addressNumber !== undefined ||
+         addressComplement !== undefined ||
+         addressCity !== undefined ||
+         addressState !== undefined ||
+         addressZipCode !== undefined)
+        ? { address: legacyAddress }
+        : {})
   });
 
   const updated = await User.findByPk(targetId, {
