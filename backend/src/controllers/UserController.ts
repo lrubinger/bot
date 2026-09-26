@@ -42,13 +42,22 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     profile,
     companyId: bodyCompanyId,
     queueIds,
-    whatsappId
+    whatsappId,
+    phone
   } = req.body;
   let userCompanyId: number | null = null;
+  let requestedProfile = profile;
 
   if (req.user !== undefined) {
-    const { companyId: cId } = req.user;
-    userCompanyId = cId;
+    const requester = await (await import("../models/User")).default.findByPk(+req.user.id);
+    if (!requester) throw new AppError("ERR_NO_USER_FOUND", 404);
+
+    if (requester.super === true) {
+      userCompanyId = bodyCompanyId || requester.companyId;
+    } else {
+      userCompanyId = requester.companyId;
+      requestedProfile = "user";
+    }
   }
 
   if (
@@ -64,10 +73,11 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     email,
     password,
     name,
-    profile,
-    companyId: bodyCompanyId || userCompanyId,
+    profile: requestedProfile,
+    companyId: userCompanyId,
     queueIds,
-    whatsappId
+    whatsappId,
+    phone
   });
 
   const io = getIO();
@@ -139,16 +149,28 @@ export const remove = async (
   res: Response
 ): Promise<Response> => {
   const { userId } = req.params;
-  const { companyId } = req.user;
+  const requester = await (await import("../models/User")).default.findByPk(+req.user.id);
+  const target = await (await import("../models/User")).default.findByPk(+userId);
 
-  if (req.user.profile !== "admin") {
+  if (!requester || !target) {
+    throw new AppError("ERR_NO_USER_FOUND", 404);
+  }
+
+  const isMaster = requester.super === true;
+  const sameCompany = requester.companyId === target.companyId;
+
+  if (!isMaster && !(requester.profile === "admin" && sameCompany)) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 
-  await DeleteUserService(userId, companyId);
+  if (requester.id === target.id) {
+    throw new AppError("Não é possível excluir o próprio usuário.", 400);
+  }
+
+  await DeleteUserService(userId, target.companyId);
 
   const io = getIO();
-  io.emit(`company-${companyId}-user`, {
+  io.emit(`company-${target.companyId}-user`, {
     action: "delete",
     userId
   });
