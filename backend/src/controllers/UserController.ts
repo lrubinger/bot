@@ -208,8 +208,10 @@ export const update = async (
     userData.addressState !== undefined ||
     userData.addressZipCode !== undefined;
 
+  let persistedProfile: any = {};
+
   if (hasProfileFields) {
-    await sequelize.query(
+    const [, metadata]: any = await sequelize.query(
       `UPDATE "Users"
           SET "phone" = COALESCE(:phone, "phone"),
               "address" = COALESCE(:address, "address"),
@@ -220,7 +222,9 @@ export const update = async (
               "addressState" = COALESCE(:addressState, "addressState"),
               "addressZipCode" = COALESCE(:addressZipCode, "addressZipCode"),
               "updatedAt" = NOW()
-        WHERE "id" = :userId`,
+        WHERE "id" = :userId
+        RETURNING "phone", "address", "addressStreet", "addressNumber",
+                  "addressComplement", "addressCity", "addressState", "addressZipCode"`,
       {
         replacements: {
           userId: +userId,
@@ -235,32 +239,74 @@ export const update = async (
         }
       }
     );
-  }
 
-  const persistedRows = await sequelize.query(
-    `SELECT "phone", "address", "addressStreet", "addressNumber",
-            "addressComplement", "addressCity", "addressState", "addressZipCode"
-       FROM "Users"
-      WHERE "id" = :userId
-      LIMIT 1`,
-    {
-      replacements: { userId: +userId },
-      type: QueryTypes.SELECT
+    const returnedRows = Array.isArray(metadata?.rows)
+      ? metadata.rows
+      : Array.isArray(metadata)
+        ? metadata
+        : [];
+
+    if (returnedRows.length) {
+      persistedProfile = returnedRows[0];
+    } else {
+      const verifyRows = await sequelize.query(
+        `SELECT "phone", "address", "addressStreet", "addressNumber",
+                "addressComplement", "addressCity", "addressState", "addressZipCode"
+           FROM "Users"
+          WHERE "id" = :userId
+          LIMIT 1`,
+        {
+          replacements: { userId: +userId },
+          type: QueryTypes.SELECT
+        }
+      ) as any[];
+      persistedProfile = verifyRows[0] || {};
     }
-  ) as any[];
+
+    const expectedChecks: Array<[string, any]> = [
+      ["phone", userData.phone],
+      ["addressStreet", userData.addressStreet],
+      ["addressNumber", userData.addressNumber],
+      ["addressComplement", userData.addressComplement],
+      ["addressCity", userData.addressCity],
+      ["addressState", userData.addressState],
+      ["addressZipCode", userData.addressZipCode]
+    ];
+
+    const failed = expectedChecks.find(([key, expected]) =>
+      expected !== undefined && String(persistedProfile[key] ?? "") !== String(expected ?? "")
+    );
+
+    if (failed) {
+      throw new AppError("Os dados do perfil não foram persistidos corretamente. Tente novamente.", 500);
+    }
+  } else {
+    const verifyRows = await sequelize.query(
+      `SELECT "phone", "address", "addressStreet", "addressNumber",
+              "addressComplement", "addressCity", "addressState", "addressZipCode"
+         FROM "Users"
+        WHERE "id" = :userId
+        LIMIT 1`,
+      {
+        replacements: { userId: +userId },
+        type: QueryTypes.SELECT
+      }
+    ) as any[];
+    persistedProfile = verifyRows[0] || {};
+  }
 
   const responseUser = {
     ...(user as any),
-    ...(persistedRows[0] || {})
+    ...persistedProfile
   };
 
   const io = getIO();
   io.emit(`company-${target.companyId}-user`, {
     action: "update",
-    user
+    user: responseUser
   });
 
-  return res.status(200).json(user);
+  return res.status(200).json(responseUser);
 };
 
 export const remove = async (
