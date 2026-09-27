@@ -1,0 +1,26 @@
+name: Limpar backups antigos
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/cleanup-old-backups.yml
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Excluir branches antigas de backup
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          git init cleanup-repo
+          cd cleanup-repo
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push origin --delete backup-before-frontend-rollback-20260924 codex/reparar-deploy-portoplan-bot
