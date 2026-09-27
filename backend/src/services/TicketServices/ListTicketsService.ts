@@ -25,6 +25,7 @@ interface Request {
   tags: number[];
   users: number[];
   companyId: number;
+  archived?: string;
 }
 
 interface Response {
@@ -45,7 +46,8 @@ const ListTicketsService = async ({
   showAll,
   userId,
   withUnreadMessages,
-  companyId
+  companyId,
+  archived
 }: Request): Promise<Response> => {
   let whereCondition: Filterable["where"] = {
     [Op.or]: [{ userId }, { status: "pending" }],
@@ -212,7 +214,8 @@ const ListTicketsService = async ({
 
   whereCondition = {
     ...whereCondition,
-    companyId
+    companyId,
+    archived: archived === "true"
   };
 
   const { count, rows: tickets } = await Ticket.findAndCountAll({
