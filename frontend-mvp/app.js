@@ -364,7 +364,7 @@ async function contacts(){
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Nome</th><th>Empresa</th><th>E-mail</th><th>Telefone</th></tr>
+          <tr><th>Nome</th><th>Empresa</th><th>E-mail</th><th>Telefone</th><th>Ações</th></tr>
         </thead>
         <tbody>
           ${list.map(c=>`
@@ -372,12 +372,76 @@ async function contacts(){
               <td>${esc(c.name)}</td>
               <td>${esc(c.companyName||"")}</td>
               <td>${esc(c.email||"")}</td>
-              <td>${esc(c.number||"")}</td>
+              <td>${esc(formatPhoneBR(c.number||""))}</td>
+              <td>
+                <div class="user-actions">
+                  <button class="ghost edit-contact-row" data-id="${c.id}">Editar</button>
+                  <button class="ghost danger delete-contact-row" data-id="${c.id}" data-name="${esc(c.name||"contato")}">Excluir</button>
+                </div>
+              </td>
             </tr>`).join("")}
         </tbody>
       </table>
     </div>
   `);
+
+  const findContact=id=>list.find(item=>String(item.id)===String(id));
+
+  document.querySelectorAll(".edit-contact-row").forEach(btn=>{
+    btn.onclick=()=>{
+      const item=findContact(btn.dataset.id);
+      if(!item)return;
+
+      modal(`
+        <h2>Editar contato</h2>
+        <div class="settings-grid user-edit-grid">
+          <label class="full"><span>Nome</span><input id="editContactName" value="${esc(item.name||"")}" /></label>
+          <label><span>Empresa</span><input id="editContactCompany" value="${esc(item.companyName||"")}" /></label>
+          <label><span>E-mail</span><input id="editContactEmail" type="email" value="${esc(item.email||"")}" /></label>
+          <label class="full"><span>Telefone</span><input id="editContactPhone" inputmode="tel" value="${esc(formatPhoneBR(item.number||""))}" /></label>
+        </div>
+        <div class="settings-actions">
+          <button class="primary" id="saveContactEdit" type="button">Salvar contato</button>
+          <span id="editContactStatus" class="small"></span>
+        </div>
+      `);
+
+      $("#editContactPhone")?.addEventListener("input",e=>{e.target.value=formatPhoneBR(e.target.value);});
+
+      $("#saveContactEdit").onclick=async()=>{
+        const status=$("#editContactStatus");
+        status.textContent="Salvando...";
+        try{
+          await api("/contacts/"+item.id+"/basic",{
+            method:"PUT",
+            body:JSON.stringify({
+              name:$("#editContactName").value.trim(),
+              company:$("#editContactCompany").value.trim(),
+              email:$("#editContactEmail").value.trim(),
+              number:$("#editContactPhone").value.replace(/\D/g,"")
+            })
+          });
+          status.textContent="Contato salvo.";
+          setTimeout(()=>{closeModal();contacts();},500);
+        }catch(err){
+          status.textContent=err.message||"Não foi possível salvar o contato.";
+        }
+      };
+    };
+  });
+
+  document.querySelectorAll(".delete-contact-row").forEach(btn=>{
+    btn.onclick=async()=>{
+      const name=btn.dataset.name||"este contato";
+      if(!confirm(`Excluir ${name}? Esta ação não pode ser desfeita.`))return;
+      try{
+        await api("/contacts/"+btn.dataset.id,{method:"DELETE"});
+        await contacts();
+      }catch(err){
+        alert(err.message||"Não foi possível excluir o contato.");
+      }
+    };
+  });
 
   $("#importContactsBtn").onclick=()=>$("#importContactsFile").click();
 
