@@ -978,6 +978,8 @@ function openForcedPasswordChange(){
 let ticketsRefreshTimer=null;
 let ticketMessagesRefreshTimer=null;
 let activeTicketId=null;
+let ticketsCache=[];
+let ticketDetailsCollapsed=localStorage.getItem("pp_ticket_details_collapsed")==="1";
 
 function ticketStatusLabel(status){
   const value=String(status||"").toLowerCase();
@@ -987,16 +989,63 @@ function ticketStatusLabel(status){
   return status||"";
 }
 
-function scheduleTicketsRefresh(){
-  clearTimeout(ticketsRefreshTimer);
-  if(state.page!=="tickets") return;
-  ticketsRefreshTimer=setTimeout(()=>{ if(state.page==="tickets") tickets(true); },3000);
+function ticketTime(value){
+  if(!value)return "";
+  try{
+    return new Date(value).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+  }catch(_){return ""}
 }
 
-async function tickets(silent=false){
-  setTitle("Atendimentos");
-  clearTimeout(ticketsRefreshTimer);
+function ticketInitials(name){
+  return String(name||"?").trim().split(/\s+/).slice(0,2).map(x=>x[0]||"").join("").toUpperCase()||"?";
+}
 
+function ticketMediaHtml(m){
+  if(!m?.mediaUrl)return "";
+  const type=String(m.mediaType||"").toLowerCase();
+  const url=esc(m.mediaUrl);
+  if(type.startsWith("image") || ["image","sticker"].includes(type)){
+    return `<a class="ticket-media-link" href="${url}" target="_blank" rel="noopener"><img class="ticket-media-image" src="${url}" alt="Imagem enviada" /></a>`;
+  }
+  if(type.startsWith("video") || type==="video"){
+    return `<video class="ticket-media-video" controls preload="metadata" src="${url}"></video>`;
+  }
+  if(type.startsWith("audio") || type==="audio" || type==="ptt"){
+    return `<audio class="ticket-media-audio" controls preload="metadata" src="${url}"></audio>`;
+  }
+  return `<a class="ticket-file-link" href="${url}" target="_blank" rel="noopener">📎 Abrir arquivo</a>`;
+}
+
+function renderTicketMessages(messages){
+  return (messages||[]).map(m=>{
+    const body=String(m.body||"");
+    const media=ticketMediaHtml(m);
+    const when=ticketTime(m.createdAt);
+    return `<div class="wa-message-row ${m.fromMe?"me":""}">
+      <div class="wa-message ${m.fromMe?"me":""}">
+        ${media}
+        ${body?`<div class="wa-message-body">${esc(body)}</div>`:""}
+        <div class="wa-message-meta">${when}${m.fromMe?" ✓✓":""}</div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderTicketList(list){
+  return (list||[]).length ? list.map(t=>{
+    const contact=t.contact||{};
+    const unread=Number(t.unreadMessages||0);
+    return `<button class="wa-conversation ${String(activeTicketId)===String(t.id)?"active":""}" data-ticket-id="${t.id}">
+      <span class="wa-avatar">${contact.profilePicUrl?`<img src="${esc(contact.profilePicUrl)}" alt="" />`:esc(ticketInitials(contact.name||contact.number))}</span>
+      <span class="wa-conversation-main">
+        <span class="wa-conversation-top"><b>${esc(contact.name||formatPhoneBR(contact.number||"")||"Contato")}</b><small>${ticketTime(t.updatedAt||t.createdAt)}</small></span>
+        <span class="wa-conversation-bottom"><span>${esc(t.lastMessage||ticketStatusLabel(t.status)||"")}</span>${unread?`<strong>${unread}</strong>`:""}</span>
+      </span>
+    </button>`;
+  }).join("") : '<div class="wa-empty-list">Nenhuma conversa aguardando ou em atendimento.</div>';
+}
+
+async function fetchTicketList(){
   const [pendingData,openData]=await Promise.all([
     api('/tickets?pageNumber=1&status=pending&showAll=true&queueIds=[]&tags=[]&users=[]'),
     api('/tickets?pageNumber=1&status=open&showAll=true&queueIds=[]&tags=[]&users=[]')
@@ -1004,66 +1053,301 @@ async function tickets(silent=false){
   const merged=[...(pendingData?.tickets||[]),...(openData?.tickets||[])];
   const byId=new Map();
   merged.forEach(ticket=>byId.set(String(ticket.id),ticket));
-  const list=[...byId.values()].sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0));
-
-  content(`
-    <div class="toolbar"><span class="small">Conversas recebidas pelo WhatsApp aparecem automaticamente nesta tela.</span></div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Contato</th><th>Status</th><th>Não lidas</th><th>Última mensagem</th><th>Conversa</th></tr></thead>
-        <tbody>
-          ${list.length?list.map(t=>`
-            <tr class="clickable ticket-row" data-id="${t.id}">
-              <td>${esc(t.contact?.name||t.contactId)}</td>
-              <td><span class="pill">${esc(ticketStatusLabel(t.status))}</span></td>
-              <td>${Number(t.unreadMessages||0)>0?`<span class="badge">${Number(t.unreadMessages||0)}</span>`:"—"}</td>
-              <td>${esc(t.lastMessage||"")}</td>
-              <td><button class="contact-icon-btn ticket-chat-btn" data-id="${t.id}" title="Abrir conversa" aria-label="Abrir conversa"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.4 0-2.73-.34-3.9-.95L3 21l1.98-5.28A8.46 8.46 0 0 1 3.5 11.5 8.5 8.5 0 1 1 21 11.5Z"/></svg></button></td>
-            </tr>`).join(""):'<tr><td colspan="5"><div class="empty-state">Nenhum atendimento aguardando ou em andamento.</div></td></tr>'}
-        </tbody>
-      </table>
-    </div>`);
-
-  document.querySelectorAll(".ticket-row").forEach(r=>{r.onclick=e=>{if(e.target.closest(".ticket-chat-btn"))return;openTicket(r.dataset.id);};});
-  document.querySelectorAll(".ticket-chat-btn").forEach(btn=>{btn.onclick=e=>{e.stopPropagation();openTicket(btn.dataset.id);};});
-
-  const pendingTicketId=localStorage.getItem("pp_open_ticket");
-  if(pendingTicketId){localStorage.removeItem("pp_open_ticket");setTimeout(()=>openTicket(pendingTicketId),80);}
-  scheduleTicketsRefresh();
+  return [...byId.values()].sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0));
 }
 
-function renderTicketMessages(messages){
-  return (messages||[]).map(m=>`<div class="msg ${m.fromMe?"me":""}">${esc(m.body||"")}</div>`).join("");
+function bindTicketList(){
+  document.querySelectorAll("[data-ticket-id]").forEach(btn=>{
+    btn.onclick=()=>openTicket(btn.dataset.ticketId);
+  });
+}
+
+function filterTicketList(){
+  const query=String($("#ticketSearch")?.value||"").trim().toLowerCase();
+  const status=$("#ticketStatusFilter")?.value||"all";
+  const filtered=ticketsCache.filter(t=>{
+    const name=String(t.contact?.name||"").toLowerCase();
+    const number=String(t.contact?.number||"").toLowerCase();
+    const last=String(t.lastMessage||"").toLowerCase();
+    const matchesText=!query || name.includes(query) || number.includes(query) || last.includes(query);
+    const matchesStatus=status==="all" || String(t.status||"")===status;
+    return matchesText && matchesStatus;
+  });
+  const listEl=$("#ticketConversationList");
+  if(listEl){
+    listEl.innerHTML=renderTicketList(filtered);
+    bindTicketList();
+  }
+}
+
+async function refreshTicketsList(){
+  if(state.page!=="tickets")return;
+  try{
+    ticketsCache=await fetchTicketList();
+    filterTicketList();
+  }catch(_){}
+  clearTimeout(ticketsRefreshTimer);
+  if(state.page==="tickets")ticketsRefreshTimer=setTimeout(refreshTicketsList,3000);
+}
+
+async function tickets(){
+  setTitle("Atendimentos");
+  clearTimeout(ticketsRefreshTimer);
+  clearTimeout(ticketMessagesRefreshTimer);
+  activeTicketId=null;
+  ticketsCache=await fetchTicketList();
+
+  content(`
+    <div class="wa-inbox ${ticketDetailsCollapsed?"details-collapsed":""}" id="waInbox">
+      <aside class="wa-conversations-panel">
+        <div class="wa-conversations-head">
+          <div>
+            <h3>Conversas</h3>
+            <span>WhatsApp</span>
+          </div>
+          <select id="ticketStatusFilter" aria-label="Filtrar conversas">
+            <option value="all">Todas</option>
+            <option value="pending">Aguardando</option>
+            <option value="open">Em atendimento</option>
+          </select>
+          <div class="wa-search-wrap">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+            <input id="ticketSearch" placeholder="Buscar conversa" />
+          </div>
+        </div>
+        <div class="wa-conversations-list" id="ticketConversationList">${renderTicketList(ticketsCache)}</div>
+      </aside>
+
+      <section class="wa-chat-panel" id="ticketChatPanel">
+        <div class="wa-chat-empty">
+          <div class="wa-chat-empty-icon">💬</div>
+          <b>Atendimentos</b>
+          <span>Selecione uma conversa para visualizar as mensagens.</span>
+        </div>
+      </section>
+
+      <aside class="wa-contact-panel" id="ticketContactPanel">
+        <button class="wa-details-toggle" id="ticketDetailsToggle" type="button" title="${ticketDetailsCollapsed?"Mostrar informações":"Recolher informações"}" aria-label="${ticketDetailsCollapsed?"Mostrar informações":"Recolher informações"}">
+          <svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg>
+        </button>
+        <div id="ticketContactContent" class="wa-contact-content">
+          <div class="wa-contact-empty">As informações do contato aparecerão aqui.</div>
+        </div>
+      </aside>
+    </div>
+  `);
+
+  bindTicketList();
+  $("#ticketSearch").oninput=filterTicketList;
+  $("#ticketStatusFilter").onchange=filterTicketList;
+  $("#ticketDetailsToggle").onclick=()=>{
+    ticketDetailsCollapsed=!ticketDetailsCollapsed;
+    localStorage.setItem("pp_ticket_details_collapsed",ticketDetailsCollapsed?"1":"0");
+    $("#waInbox")?.classList.toggle("details-collapsed",ticketDetailsCollapsed);
+    const btn=$("#ticketDetailsToggle");
+    if(btn){
+      btn.title=ticketDetailsCollapsed?"Mostrar informações":"Recolher informações";
+      btn.setAttribute("aria-label",btn.title);
+    }
+  };
+
+  const pendingTicketId=localStorage.getItem("pp_open_ticket");
+  if(pendingTicketId){
+    localStorage.removeItem("pp_open_ticket");
+    setTimeout(()=>openTicket(pendingTicketId),80);
+  }else if(ticketsCache.length){
+    setTimeout(()=>openTicket(ticketsCache[0].id),80);
+  }
+
+  ticketsRefreshTimer=setTimeout(refreshTicketsList,3000);
+}
+
+function renderTicketContactInfo(ticket){
+  const c=ticket?.contact||{};
+  const extra=Array.isArray(c.extraInfo)?c.extraInfo:[];
+  return `
+    <div class="wa-profile-head">
+      <span class="wa-profile-avatar">${c.profilePicUrl?`<img src="${esc(c.profilePicUrl)}" alt="" />`:esc(ticketInitials(c.name||c.number))}</span>
+      <h3>${esc(c.name||"Contato")}</h3>
+      <span>${esc(formatPhoneBR(c.number||""))}</span>
+    </div>
+    <div class="wa-profile-section">
+      <h4>Atendimento</h4>
+      <div class="wa-info-row"><span>Status</span><b>${esc(ticketStatusLabel(ticket?.status))}</b></div>
+      <div class="wa-info-row"><span>Atendente</span><b>${esc(ticket?.user?.name||"Não atribuído")}</b></div>
+      <div class="wa-info-row"><span>Fila</span><b>${esc(ticket?.queue?.name||"Sem fila")}</b></div>
+      <div class="wa-info-row"><span>Conexão</span><b>${esc(ticket?.whatsapp?.name||"WhatsApp")}</b></div>
+    </div>
+    <div class="wa-profile-section">
+      <h4>Dados do contato</h4>
+      <div class="wa-info-row"><span>Telefone</span><b>${esc(formatPhoneBR(c.number||""))||"—"}</b></div>
+      <div class="wa-info-row"><span>E-mail</span><b>${esc(c.email||"—")}</b></div>
+      ${extra.map(x=>`<div class="wa-info-row"><span>${esc(x.name||"Informação")}</span><b>${esc(x.value||"—")}</b></div>`).join("")}
+    </div>
+    ${Array.isArray(ticket?.tags)&&ticket.tags.length?`<div class="wa-profile-section"><h4>Etiquetas</h4><div class="wa-tags">${ticket.tags.map(tag=>`<span>${esc(tag.name)}</span>`).join("")}</div></div>`:""}
+  `;
 }
 
 async function refreshOpenTicket(id){
-  if(String(activeTicketId)!==String(id) || $("#modal").classList.contains("hidden")) return;
+  if(String(activeTicketId)!==String(id) || state.page!=="tickets") return;
   try{
     const data=await api("/messages/"+id+"?pageNumber=1");
-    if(String(activeTicketId)!==String(id) || $("#modal").classList.contains("hidden")) return;
-    const box=$("#messages");
+    if(String(activeTicketId)!==String(id) || state.page!=="tickets") return;
+
+    const box=$("#ticketMessages");
     if(box){
-      const wasNearBottom=box.scrollHeight-box.scrollTop-box.clientHeight<120;
+      const wasNearBottom=box.scrollHeight-box.scrollTop-box.clientHeight<140;
       const html=renderTicketMessages(data.messages||[]);
-      if(box.innerHTML!==html){box.innerHTML=html;if(wasNearBottom)box.scrollTop=box.scrollHeight;}
+      if(box.innerHTML!==html){
+        box.innerHTML=html;
+        if(wasNearBottom)box.scrollTop=box.scrollHeight;
+      }
     }
+
     const title=$("#ticketConversationTitle");
-    if(title)title.textContent=data.ticket?.contact?.name||"Atendimento";
+    if(title)title.textContent=data.ticket?.contact?.name||formatPhoneBR(data.ticket?.contact?.number||"")||"Atendimento";
+    const details=$("#ticketContactContent");
+    if(details)details.innerHTML=renderTicketContactInfo(data.ticket);
   }catch(_){}
+
   clearTimeout(ticketMessagesRefreshTimer);
-  ticketMessagesRefreshTimer=setTimeout(()=>refreshOpenTicket(id),1500);
+  if(state.page==="tickets")ticketMessagesRefreshTimer=setTimeout(()=>refreshOpenTicket(id),1500);
+}
+
+async function sendTicketPayload(id,files=[],body=""){
+  if(!files.length){
+    await api("/messages/"+id,{method:"POST",body:JSON.stringify({body})});
+    return;
+  }
+  const form=new FormData();
+  files.forEach(file=>form.append("medias",file,file.name||("imagem-"+Date.now()+".png")));
+  form.append("body",body||"");
+  await api("/messages/"+id,{method:"POST",body:form});
+}
+
+function insertTicketEmoji(value){
+  const input=$("#msgBody");
+  if(!input)return;
+  const start=input.selectionStart??input.value.length;
+  const end=input.selectionEnd??input.value.length;
+  input.value=input.value.slice(0,start)+value+input.value.slice(end);
+  input.focus();
+  const pos=start+value.length;
+  input.setSelectionRange(pos,pos);
 }
 
 async function openTicket(id){
   activeTicketId=String(id);
   clearTimeout(ticketMessagesRefreshTimer);
+
+  document.querySelectorAll("[data-ticket-id]").forEach(x=>x.classList.toggle("active",String(x.dataset.ticketId)===String(id)));
+
   const data=await api("/messages/"+id+"?pageNumber=1");
+  const ticket=data.ticket||{};
   const msgs=data.messages||[];
-  modal(`<h2 id="ticketConversationTitle">${esc(data.ticket?.contact?.name||"Atendimento")}</h2><div class="small">As novas mensagens recebidas pelo WhatsApp são atualizadas automaticamente.</div><div class="messages" id="messages">${renderTicketMessages(msgs)}</div><div class="composer"><textarea id="msgBody" placeholder="Digite uma mensagem"></textarea><button class="primary" id="sendMsg">Enviar</button></div>`);
-  const box=$("#messages");if(box)box.scrollTop=box.scrollHeight;
-  $("#sendMsg").onclick=async()=>{const body=$("#msgBody").value.trim();if(!body)return;const button=$("#sendMsg");button.disabled=true;try{await api("/messages/"+id,{method:"POST",body:JSON.stringify({body})});$("#msgBody").value="";setTimeout(()=>refreshOpenTicket(id),250);}finally{button.disabled=false;}};
+  const chat=$("#ticketChatPanel");
+  const details=$("#ticketContactContent");
+  if(!chat)return;
+
+  chat.innerHTML=`
+    <div class="wa-chat-head">
+      <span class="wa-avatar large">${ticket.contact?.profilePicUrl?`<img src="${esc(ticket.contact.profilePicUrl)}" alt="" />`:esc(ticketInitials(ticket.contact?.name||ticket.contact?.number))}</span>
+      <div><b id="ticketConversationTitle">${esc(ticket.contact?.name||formatPhoneBR(ticket.contact?.number||"")||"Atendimento")}</b><small>${esc(ticketStatusLabel(ticket.status))}</small></div>
+      <span class="wa-chat-connection">${esc(ticket.whatsapp?.name||"WhatsApp")}</span>
+    </div>
+    <div class="wa-messages" id="ticketMessages">${renderTicketMessages(msgs)}</div>
+    <div class="wa-upload-preview hidden" id="ticketUploadPreview"></div>
+    <form class="wa-composer" id="ticketComposer">
+      <div class="wa-compose-actions">
+        <button type="button" class="wa-compose-icon" id="ticketAttach" title="Foto, vídeo ou arquivo">＋</button>
+        <button type="button" class="wa-compose-icon" id="ticketEmoji" title="Emoji">☺</button>
+      </div>
+      <textarea id="msgBody" rows="1" placeholder="Digite uma mensagem"></textarea>
+      <button class="wa-send" id="sendMsg" type="submit" title="Enviar" aria-label="Enviar">
+        <svg viewBox="0 0 24 24"><path d="m3 11 18-8-8 18-2-8-8-2Z"/><path d="m11 13 10-10"/></svg>
+      </button>
+      <input id="ticketFiles" type="file" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" class="hidden" />
+      <div class="wa-emoji-popover hidden" id="ticketEmojiPopover">
+        ${["😀","😂","😍","😊","👍","🙏","👏","🎉","❤️","🔥","✅","😉","😅","🤝","📌","🚀"].map(x=>`<button type="button" data-emoji="${x}">${x}</button>`).join("")}
+      </div>
+    </form>
+  `;
+
+  if(details)details.innerHTML=renderTicketContactInfo(ticket);
+
+  const box=$("#ticketMessages");
+  if(box)box.scrollTop=box.scrollHeight;
+
+  let pendingFiles=[];
+  const preview=$("#ticketUploadPreview");
+  const renderPreview=()=>{
+    if(!preview)return;
+    if(!pendingFiles.length){
+      preview.classList.add("hidden");
+      preview.innerHTML="";
+      return;
+    }
+    preview.classList.remove("hidden");
+    preview.innerHTML=pendingFiles.map((file,i)=>`<span>📎 ${esc(file.name||"imagem colada")} <button type="button" data-remove-file="${i}">×</button></span>`).join("");
+    preview.querySelectorAll("[data-remove-file]").forEach(btn=>btn.onclick=()=>{
+      pendingFiles.splice(Number(btn.dataset.removeFile),1);
+      renderPreview();
+    });
+  };
+
+  const addFiles=files=>{
+    pendingFiles.push(...Array.from(files||[]));
+    renderPreview();
+  };
+
+  $("#ticketAttach").onclick=()=>$("#ticketFiles").click();
+  $("#ticketFiles").onchange=e=>{addFiles(e.target.files);e.target.value="";};
+  $("#ticketEmoji").onclick=()=>$("#ticketEmojiPopover").classList.toggle("hidden");
+  document.querySelectorAll("[data-emoji]").forEach(btn=>btn.onclick=()=>insertTicketEmoji(btn.dataset.emoji));
+
+  $("#msgBody").addEventListener("paste",e=>{
+    const files=Array.from(e.clipboardData?.files||[]).filter(file=>file.type.startsWith("image/"));
+    if(files.length){
+      e.preventDefault();
+      files.forEach((file,i)=>{
+        if(!file.name){
+          try{Object.defineProperty(file,"name",{value:`print-${Date.now()}-${i}.png`});}catch(_){}
+        }
+      });
+      addFiles(files);
+    }
+  });
+
+  $("#msgBody").addEventListener("keydown",e=>{
+    if(e.key==="Enter" && !e.shiftKey){
+      e.preventDefault();
+      $("#ticketComposer").requestSubmit();
+    }
+  });
+
+  $("#ticketComposer").onsubmit=async e=>{
+    e.preventDefault();
+    const body=$("#msgBody").value.trim();
+    if(!body && !pendingFiles.length)return;
+
+    const button=$("#sendMsg");
+    button.disabled=true;
+    try{
+      await sendTicketPayload(id,pendingFiles,body);
+      $("#msgBody").value="";
+      pendingFiles=[];
+      renderPreview();
+      setTimeout(()=>refreshOpenTicket(id),250);
+    }catch(err){
+      alert(err.message||"Não foi possível enviar a mensagem.");
+    }finally{
+      button.disabled=false;
+    }
+  };
+
   ticketMessagesRefreshTimer=setTimeout(()=>refreshOpenTicket(id),1200);
 }
+
 async function kanban(){
   setTitle("Kanban");
   const settings=await api("/settings");
