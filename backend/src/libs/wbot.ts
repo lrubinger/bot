@@ -110,6 +110,16 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           // keepAliveIntervalMs: 1000 * 60 * 10 * 3,
           msgRetryCounterCache,
           shouldIgnoreJid: jid => isJidBroadcast(jid),
+          syncFullHistory: true,
+          shouldSyncHistoryMessage: () => true,
+          getMessage: async key => {
+            try {
+              const stored = await store.loadMessage(key.remoteJid!, key.id!);
+              return stored?.message;
+            } catch (_) {
+              return undefined;
+            }
+          }
         });
 
         // wsocket = makeWASocket({
@@ -261,6 +271,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         );
         wsocket.ev.on("creds.update", saveState);
 
+        wsocket.store = store;
         store.bind(wsocket.ev);
       })();
     } catch (error) {
