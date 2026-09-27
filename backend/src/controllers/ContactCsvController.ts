@@ -201,6 +201,48 @@ export const exportCsv = async (req: Request, res: Response): Promise<Response> 
 };
 
 
+export const createBasic = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+  const name = clean(req.body?.name);
+  const company = clean(req.body?.company);
+  const email = clean(req.body?.email);
+  const number = normalizePhone(req.body?.number);
+
+  if (!name) throw new AppError("Informe o nome do contato.", 400);
+  if (!number) throw new AppError("Informe o telefone do contato.", 400);
+
+  const duplicateNumber = await Contact.findOne({ where: { companyId, number } });
+  if (duplicateNumber) {
+    throw new AppError("Já existe um contato com este telefone.", 400);
+  }
+
+  if (email) {
+    const duplicateEmail = await Contact.findOne({
+      where: { companyId, email: { [Op.iLike]: email } }
+    });
+    if (duplicateEmail) {
+      throw new AppError("Já existe um contato com este e-mail.", 400);
+    }
+  }
+
+  const contact = await Contact.create({
+    name,
+    number,
+    email,
+    companyId
+  } as any);
+  await setCompany(contact.id, company);
+
+  return res.status(201).json({
+    id: contact.id,
+    name: contact.name,
+    number: contact.number,
+    email: contact.email,
+    companyName: company
+  });
+};
+
+
 export const updateBasic = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
   const contactId = Number(req.params.contactId);
