@@ -2,6 +2,7 @@ import fs from "fs";
 import { Request, Response } from "express";
 import * as XLSX from "xlsx";
 import Contact from "../models/Contact";
+import { Op } from "sequelize";
 import ContactCustomField from "../models/ContactCustomField";
 import AppError from "../errors/AppError";
 
@@ -107,8 +108,29 @@ export const importCsv = async (req: Request, res: Response): Promise<Response> 
       try {
         let contact = await Contact.findOne({ where: { companyId, number } });
 
+        if (!contact && email) {
+          contact = await Contact.findOne({
+            where: {
+              companyId,
+              email: { [Op.iLike]: email }
+            }
+          });
+        }
+
         if (contact) {
-          await contact.update({ name, email });
+          const currentCompany = await getCompany(contact.id);
+          const sameData =
+            clean(contact.name) === name &&
+            clean(contact.email).toLowerCase() === email.toLowerCase() &&
+            normalizePhone(contact.number) === number &&
+            clean(currentCompany) === company;
+
+          if (sameData) {
+            ignored += 1;
+            continue;
+          }
+
+          await contact.update({ name, email, number });
           await setCompany(contact.id, company);
           updated += 1;
         } else {
@@ -176,4 +198,56 @@ export const exportCsv = async (req: Request, res: Response): Promise<Response> 
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
   return res.status(200).send("\uFEFF" + csv);
+};
+
+
+export const updateBasic = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+  const contactId = Number(req.params.contactId);
+  const contact = await Contact.findOne({ where: { id: contactId, companyId } });
+
+  if (!contact) throw new AppError("Contato não encontrado.", 404);
+
+  const name = clean(req.body?.name);
+  const company = clean(req.body?.company);
+  const email = clean(req.body?.email);
+  const number = normalizePhone(req.body?.number);
+
+  if (!name) throw new AppError("Informe o nome do contato.", 400);
+  if (!number) throw new AppError("Informe o telefone do contato.", 400);
+
+  const duplicateNumber = await Contact.findOne({
+    where: {
+      companyId,
+      number,
+      id: { [Op.ne]: contactId }
+    }
+  });
+  if (duplicateNumber) {
+    throw new AppError("Já existe outro contato com este telefone.", 400);
+  }
+
+  if (email) {
+    const duplicateEmail = await Contact.findOne({
+      where: {
+        companyId,
+        email: { [Op.iLike]: email },
+        id: { [Op.ne]: contactId }
+      }
+    });
+    if (duplicateEmail) {
+      throw new AppError("Já existe outro contato com este e-mail.", 400);
+    }
+  }
+
+  await contact.update({ name, email, number });
+  await setCompany(contact.id, company);
+
+  return res.status(200).json({
+    id: contact.id,
+    name: contact.name,
+    number: contact.number,
+    email: contact.email,
+    companyName: company
+  });
 };
