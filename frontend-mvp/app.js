@@ -576,7 +576,7 @@ async function users(){
     modal(`
       <div class="temporary-password-modal">
         <h2>Definir senha temporária</h2>
-        <p>Cliente: ${esc(u.name||u.email||"Usuário")}. A senha atual será substituída e, no próximo acesso, o cliente deverá criar uma senha pessoal.</p>
+        <p>Cliente: ${esc(u.company?.name||u.name||u.email||"Usuário")}. A senha atual será substituída e, no próximo acesso, o cliente deverá criar uma senha pessoal.</p>
 
         <div class="temporary-password-fields">
           <label>
