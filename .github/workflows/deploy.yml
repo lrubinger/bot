@@ -54,8 +54,19 @@ jobs:
           npm run db:migrate
 
           pkill -f "$APP_DIR/backend/dist/server.js" >/dev/null 2>&1 || true
+          pkill -f "node .*dist/server.js" >/dev/null 2>&1 || true
+          fuser -k 4000/tcp >/dev/null 2>&1 || true
+          sleep 1
+
           nohup node "$APP_DIR/backend/dist/server.js" > "$APP_DIR/backend-mvp.log" 2>&1 &
+          BACKEND_PID=$!
           sleep 3
+
+          if ! kill -0 "$BACKEND_PID" >/dev/null 2>&1; then
+            echo "Backend novo encerrou logo apos iniciar."
+            tail -n 80 "$APP_DIR/backend-mvp.log" || true
+            exit 1
+          fi
 
           mkdir -p "$WEB_DIR"
           rm -rf "$WEB_DIR"/*
