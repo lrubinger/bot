@@ -1647,3 +1647,17 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
   flex:0 0 auto;
   box-shadow:0 0 0 2px #fff;
 }
+
+
+/* Chat message scroll */
+.wa-chat-panel{
+  min-height:0;
+}
+.wa-messages{
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+  scroll-behavior:smooth;
+}
