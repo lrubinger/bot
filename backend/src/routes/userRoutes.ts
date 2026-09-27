@@ -26,6 +26,9 @@ userRoutes.post("/users", isAuth, UserController.store);
 
 userRoutes.put("/users/:userId", isAuth, UserController.update);
 
+userRoutes.post("/users/:userId/temporary-password", isAuth, UserController.setTemporaryPassword);
+userRoutes.post("/users/change-temporary-password", isAuth, UserController.changeTemporaryPassword);
+
 userRoutes.get("/users/:userId", isAuth, UserController.show);
 
 userRoutes.delete("/users/:userId", isAuth, UserController.remove);
