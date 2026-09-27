@@ -20,6 +20,7 @@ const ShowUserService = async (id: string | number): Promise<User> => {
       "companyId",
       "profile",
       "super",
+      "active",
       "tokenVersion",
       "whatsappId"
     ],
