@@ -1129,3 +1129,24 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
 .ticket-chat-btn:hover{
   background:#f6f7fb;
 }
+
+
+/* Google Contacts import */
+.google-contacts-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:9px;
+}
+.google-g{
+  width:20px;
+  height:20px;
+  border-radius:50%;
+  display:inline-grid;
+  place-items:center;
+  background:#fff;
+  border:1px solid #d9deea;
+  font-weight:800;
+  font-size:13px;
+  color:#4285f4;
+  line-height:1;
+}
