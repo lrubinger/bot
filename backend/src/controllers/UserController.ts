@@ -25,11 +25,13 @@ type ListQueryParams = {
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { searchParam, pageNumber } = req.query as IndexQuery;
   const { companyId, profile } = req.user;
+  const requester = await (await import("../models/User")).default.findByPk(+req.user.id);
+  if (!requester) throw new AppError("ERR_NO_USER_FOUND", 404);
 
   const { users, count, hasMore } = await ListUsersService({
     searchParam,
     pageNumber,
-    companyId,
+    companyId: requester.super === true ? undefined : companyId,
     profile
   });
 
@@ -185,9 +187,24 @@ export const update = async (
       .join(", ");
   }
 
-  // Only PortoPlan master may change access level/company.
+  if (userData.active !== undefined && isSelf && userData.active === false) {
+    throw new AppError("Não é possível bloquear o próprio acesso.", 400);
+  }
+
+  if (userData.profile !== undefined) {
+    const allowedProfiles = ["admin", "user"];
+    if (!allowedProfiles.includes(String(userData.profile))) {
+      throw new AppError("ERR_INVALID_PROFILE", 400);
+    }
+
+    const mayChangeProfile =
+      isMaster || (requester.profile === "admin" && sameCompany && !target.super);
+
+    if (!mayChangeProfile) delete userData.profile;
+  }
+
+  // Somente o superusuário pode mover usuários entre empresas.
   if (!isMaster) {
-    delete userData.profile;
     delete userData.companyId;
   }
 
