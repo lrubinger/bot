@@ -875,13 +875,13 @@ async function loadSettings(selectedId){
 
     let users=[state.user];
     if(isCompanyAdmin){
-      const list=await api("/users/profile/list");
-      users=Array.isArray(list)?list:[];
+      const list=await api("/users?searchParam=&pageNumber=1");
+      users=Array.isArray(list)?list:(list?.users||[]);
       if(!users.length) users=[state.user];
     }
 
     const selected=String(selectedId || state.user?.id || users[0]?.id || "");
-    const profile=await api("/users/profile/"+selected);
+    const profile=await api("/users/"+selected);
     const ownProfile=String(state.user?.id)===selected;
 
     let connections=[];
@@ -1032,7 +1032,7 @@ async function loadSettings(selectedId){
       if(password) payload.password=password;
 
       try{
-        const updated=await api("/users/profile/"+selected,{
+        const updated=await api("/users/"+selected,{
           method:"PUT",
           body:JSON.stringify(payload)
         });
