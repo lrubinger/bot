@@ -29,6 +29,12 @@ contactRoutes.get(
   ContactCsvController.exportCsv
 );
 
+contactRoutes.put(
+  "/contacts/:contactId/basic",
+  isAuth,
+  ContactCsvController.updateBasic
+);
+
 contactRoutes.get("/contacts", isAuth, ContactController.index);
 
 contactRoutes.get("/contacts/list", isAuth, ContactController.list);
