@@ -1150,3 +1150,20 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
   color:#4285f4;
   line-height:1;
 }
+
+
+/* Contact bulk selection */
+.contact-check-col{
+  width:46px;
+  text-align:center;
+}
+.contact-check{
+  width:18px;
+  height:18px;
+  accent-color:var(--navy);
+  cursor:pointer;
+}
+.bulk-delete-contacts:disabled{
+  opacity:.45;
+  cursor:not-allowed;
+}
