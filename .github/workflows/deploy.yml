@@ -35,13 +35,35 @@ jobs:
 
       - name: Implantar versão atual
         shell: bash
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
         run: |
-          ssh -i ~/.ssh/portoplan_bot_deploy             -o IdentitiesOnly=yes             -o StrictHostKeyChecking=yes             -o ServerAliveInterval=30             root@138.197.86.14 'bash -s' <<'REMOTE'
+          test -n "$GOOGLE_CLIENT_ID" || { echo "Secret GOOGLE_CLIENT_ID nao configurado"; exit 1; }
+          test -n "$GOOGLE_CLIENT_SECRET" || { echo "Secret GOOGLE_CLIENT_SECRET nao configurado"; exit 1; }
+
+          GOOGLE_CLIENT_ID_B64="$(printf '%s' "$GOOGLE_CLIENT_ID" | base64 -w0)"
+          GOOGLE_CLIENT_SECRET_B64="$(printf '%s' "$GOOGLE_CLIENT_SECRET" | base64 -w0)"
+
+          ssh -i ~/.ssh/portoplan_bot_deploy             -o IdentitiesOnly=yes             -o StrictHostKeyChecking=yes             -o ServerAliveInterval=30             root@138.197.86.14 "GOOGLE_CLIENT_ID_B64='$GOOGLE_CLIENT_ID_B64' GOOGLE_CLIENT_SECRET_B64='$GOOGLE_CLIENT_SECRET_B64' bash -s" <<'REMOTE'
           set -euo pipefail
 
           APP_DIR=/root/bot-teste
           BRANCH=recuperacao-backend
           WEB_DIR=/var/www/portoplan-bot
+
+          GOOGLE_CLIENT_ID="$(printf '%s' "$GOOGLE_CLIENT_ID_B64" | base64 -d)"
+          GOOGLE_CLIENT_SECRET="$(printf '%s' "$GOOGLE_CLIENT_SECRET_B64" | base64 -d)"
+          ENV_FILE="$APP_DIR/backend/.env"
+
+          touch "$ENV_FILE"
+          TMP_ENV="$(mktemp)"
+          grep -v '^GOOGLE_CLIENT_ID=' "$ENV_FILE" | grep -v '^GOOGLE_CLIENT_SECRET=' | grep -v '^GOOGLE_CONTACTS_REDIRECT_URI=' > "$TMP_ENV" || true
+          cat "$TMP_ENV" > "$ENV_FILE"
+          rm -f "$TMP_ENV"
+          printf 'GOOGLE_CLIENT_ID=%s\n' "$GOOGLE_CLIENT_ID" >> "$ENV_FILE"
+          printf 'GOOGLE_CLIENT_SECRET=%s\n' "$GOOGLE_CLIENT_SECRET" >> "$ENV_FILE"
+          printf 'GOOGLE_CONTACTS_REDIRECT_URI=https://bot.portoplan.com.br/api/google/contacts/callback\n' >> "$ENV_FILE"
 
           cd "$APP_DIR"
           git reset --hard HEAD
