@@ -85,10 +85,10 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   const io = getIO();
   io.emit(`company-${userCompanyId}-user`, {
     action: "create",
-    user: responseUser
+    user
   });
 
-  return res.status(200).json(responseUser);
+  return res.status(200).json(user);
 };
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
