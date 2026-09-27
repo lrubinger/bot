@@ -87,6 +87,10 @@ class User extends Model<User> {
   @Column
   active: boolean;
 
+  @Default(false)
+  @Column
+  mustChangePassword: boolean;
+
   @CreatedAt
   createdAt: Date;
 
