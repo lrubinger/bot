@@ -2252,6 +2252,119 @@ const verifyCampaignMessageAndCloseTicket = async (
   }
 };
 
+const handleHistoryMessage = async (
+  msg: proto.IWebMessageInfo,
+  wbot: Session,
+  companyId: number
+): Promise<void> => {
+  if (!msg?.key?.id || !msg?.key?.remoteJid || !isValidMsg(msg)) return;
+
+  const exists = await Message.count({
+    where: { id: msg.key.id, companyId }
+  });
+  if (exists) return;
+
+  try {
+    const isGroup = msg.key.remoteJid.endsWith("@g.us");
+    let groupContact: Contact | undefined;
+    let msgContact = await getContactMessage(msg, wbot);
+
+    if (isGroup) {
+      try {
+        const meta = await wbot.groupMetadata(msg.key.remoteJid);
+        groupContact = await verifyContact(
+          { id: meta.id, name: meta.subject || msg.key.remoteJid },
+          wbot,
+          companyId
+        );
+      } catch (_) {
+        groupContact = await verifyContact(
+          { id: msg.key.remoteJid, name: msg.key.remoteJid },
+          wbot,
+          companyId
+        );
+      }
+    }
+
+    const contact = await verifyContact(msgContact, wbot, companyId);
+    const ticket = await FindOrCreateTicketService(
+      contact,
+      wbot.id!,
+      0,
+      companyId,
+      groupContact
+    );
+
+    const timestampSeconds = Number(msg.messageTimestamp || 0);
+    const createdAt = timestampSeconds > 0
+      ? new Date(timestampSeconds * 1000)
+      : new Date();
+
+    const body = getBodyMessage(msg) || "";
+    const type = getTypeMessage(msg) || "chat";
+    const hasMedia =
+      msg.message?.audioMessage ||
+      msg.message?.imageMessage ||
+      msg.message?.videoMessage ||
+      msg.message?.documentMessage ||
+      msg.message?.documentWithCaptionMessage ||
+      msg.message?.stickerMessage;
+
+    let mediaUrl: string | undefined;
+    let mediaType = type;
+    let finalBody = body;
+
+    if (hasMedia) {
+      try {
+        const media = await downloadMedia(msg);
+        if (media?.filename && media?.data) {
+          await writeFileAsync(
+            join(__dirname, "..", "..", "..", "public", media.filename),
+            media.data,
+            "base64"
+          );
+          mediaUrl = media.filename;
+          mediaType = media.mimetype?.split("/")[0] || type;
+          if (!finalBody) finalBody = media.filename;
+        }
+      } catch (err) {
+        logger.warn(`Nao foi possivel baixar midia historica ${msg.key.id}: ${err}`);
+      }
+    }
+
+    const messageData: any = {
+      id: msg.key.id,
+      ticketId: ticket.id,
+      contactId: msg.key.fromMe ? undefined : contact.id,
+      body: finalBody,
+      fromMe: !!msg.key.fromMe,
+      read: !!msg.key.fromMe,
+      mediaType,
+      mediaUrl,
+      ack: msg.status,
+      remoteJid: msg.key.remoteJid,
+      participant: msg.key.participant,
+      dataJson: JSON.stringify(msg),
+      createdAt
+    };
+
+    await CreateMessageService({ messageData, companyId });
+
+    const latest = await Message.findOne({
+      where: { ticketId: ticket.id, companyId },
+      order: [["createdAt", "DESC"]]
+    });
+
+    if (latest) {
+      await ticket.update({
+        lastMessage: latest.body || finalBody
+      });
+    }
+  } catch (err) {
+    logger.warn(`Falha ao importar mensagem historica ${msg.key.id}: ${err}`);
+  }
+};
+
 const filterMessages = (msg: WAMessage): boolean => {
   if (msg.message?.protocolMessage) return false;
 
@@ -2289,6 +2402,20 @@ const wbotMessageListener = async (wbot: Session, companyId: number): Promise<vo
           await verifyCampaignMessageAndCloseTicket(message, companyId);
         }
       });
+    });
+
+    wbot.ev.on("messaging-history.set", async history => {
+      const messages = (history?.messages || [])
+        .filter(filterMessages)
+        .sort((a: any, b: any) => Number(a.messageTimestamp || 0) - Number(b.messageTimestamp || 0));
+
+      logger.info(
+        `Sincronizacao de historico WhatsApp: ${messages.length} mensagens recebidas`
+      );
+
+      for (const message of messages) {
+        await handleHistoryMessage(message, wbot, companyId);
+      }
     });
 
     wbot.ev.on("messages.update", (messageUpdate: WAMessageUpdate[]) => {
