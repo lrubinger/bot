@@ -1312,12 +1312,11 @@ async function refreshOpenTicket(id){
 
     const box=$("#ticketMessages");
     if(box){
-      const wasNearBottom=box.scrollHeight-box.scrollTop-box.clientHeight<140;
       const html=renderTicketMessages(data.messages||[]);
       if(box.innerHTML!==html){
         box.innerHTML=html;
-        if(wasNearBottom)box.scrollTop=box.scrollHeight;
       }
+      requestAnimationFrame(()=>{ box.scrollTop=box.scrollHeight; });
     }
 
     const title=$("#ticketConversationTitle");
@@ -1392,7 +1391,10 @@ async function openTicket(id){
   if(details)details.innerHTML=renderTicketContactInfo(ticket);
 
   const box=$("#ticketMessages");
-  if(box)box.scrollTop=box.scrollHeight;
+  if(box){
+    requestAnimationFrame(()=>{ box.scrollTop=box.scrollHeight; });
+    setTimeout(()=>{ box.scrollTop=box.scrollHeight; },80);
+  }
 
   let pendingFiles=[];
   const preview=$("#ticketUploadPreview");
