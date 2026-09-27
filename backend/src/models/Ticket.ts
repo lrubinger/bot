@@ -46,6 +46,10 @@ class Ticket extends Model<Ticket> {
 
   @Default(false)
   @Column
+  archived: boolean;
+
+  @Default(false)
+  @Column
   isGroup: boolean;
 
   @CreatedAt
