@@ -202,7 +202,7 @@ async function connections(){
             <tr>
               <td>${esc(w.name)}</td>
               <td><span class="pill">${esc(w.status||"")}</span></td>
-              <td>${esc(w.number||"")}</td>
+              <td>${esc(formatPhoneBR(w.number||""))}</td>
               <td>
                 <button class="ghost qr" data-id="${w.id}">QR Code</button>
                 <button class="ghost restart" data-id="${w.id}">Reiniciar</button>
