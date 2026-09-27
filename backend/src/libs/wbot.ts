@@ -271,7 +271,6 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         );
         wsocket.ev.on("creds.update", saveState);
 
-        wsocket.store = store;
         store.bind(wsocket.ev);
       })();
     } catch (error) {
