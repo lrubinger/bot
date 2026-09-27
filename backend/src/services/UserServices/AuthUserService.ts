@@ -46,6 +46,10 @@ const AuthUserService = async ({
     throw new AppError("ERR_INVALID_CREDENTIALS", 401);
   }
 
+  if (user.active === false) {
+    throw new AppError("Acesso não liberado. Entre em contato com o administrador.", 403);
+  }
+
   const token = createAccessToken(user);
   const refreshToken = createRefreshToken(user);
 
