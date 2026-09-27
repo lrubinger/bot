@@ -60,6 +60,12 @@ contactRoutes.get("/contacts/list", isAuth, ContactController.list);
 contactRoutes.get("/contacts/:contactId", isAuth, ContactController.show);
 
 contactRoutes.post(
+  "/contacts/basic",
+  isAuth,
+  ContactCsvController.createBasic
+);
+
+contactRoutes.post(
   "/contacts/:contactId/start-conversation",
   isAuth,
   ContactController.startConversation
