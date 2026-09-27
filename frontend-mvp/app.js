@@ -362,17 +362,25 @@ async function contacts(){
         Importar do Google
       </button>
       <button class="ghost" id="exportContactsBtn">Exportar contatos</button>
+      <button class="ghost danger bulk-delete-contacts" id="deleteSelectedContactsBtn" type="button" disabled>
+        Excluir selecionados
+      </button>
       <input id="importContactsFile" type="file" accept=".csv,text/csv" class="hidden" />
+      <span id="contactsSelectionStatus" class="small"></span>
       <span id="contactsImportStatus" class="small"></span>
     </div>
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Nome</th><th>Empresa</th><th>E-mail</th><th>Telefone</th><th>Ações</th></tr>
+          <tr>
+            <th class="contact-check-col"><input id="selectAllContacts" class="contact-check" type="checkbox" aria-label="Selecionar todos os contatos" /></th>
+            <th>Nome</th><th>Empresa</th><th>E-mail</th><th>Telefone</th><th>Ações</th>
+          </tr>
         </thead>
         <tbody>
           ${list.map(c=>`
             <tr>
+              <td class="contact-check-col"><input class="contact-check contact-row-check" type="checkbox" data-id="${c.id}" aria-label="Selecionar ${esc(c.name||"contato")}" /></td>
               <td>${esc(c.name)}</td>
               <td>${esc(c.companyName||"")}</td>
               <td>${esc(c.email||"")}</td>
@@ -408,6 +416,72 @@ async function contacts(){
   `);
 
   const findContact=id=>list.find(item=>String(item.id)===String(id));
+
+  let selectAllMode=false;
+  const selectedContactIds=new Set();
+
+  const updateContactSelectionUi=()=>{
+    const deleteBtn=$("#deleteSelectedContactsBtn");
+    const status=$("#contactsSelectionStatus");
+    const count=selectAllMode ? Number(data.count||list.length) : selectedContactIds.size;
+
+    if(deleteBtn) deleteBtn.disabled=count===0;
+    if(status){
+      status.textContent=count>0
+        ? `${count} contato${count===1?"":"s"} selecionado${count===1?"":"s"}`
+        : "";
+    }
+  };
+
+  $("#selectAllContacts")?.addEventListener("change",e=>{
+    selectAllMode=e.target.checked;
+    selectedContactIds.clear();
+    document.querySelectorAll(".contact-row-check").forEach(check=>{
+      check.checked=selectAllMode;
+      check.disabled=selectAllMode;
+    });
+    updateContactSelectionUi();
+  });
+
+  document.querySelectorAll(".contact-row-check").forEach(check=>{
+    check.addEventListener("change",()=>{
+      const id=Number(check.dataset.id);
+      if(check.checked) selectedContactIds.add(id);
+      else selectedContactIds.delete(id);
+      updateContactSelectionUi();
+    });
+  });
+
+  $("#deleteSelectedContactsBtn")?.addEventListener("click",async()=>{
+    const count=selectAllMode ? Number(data.count||list.length) : selectedContactIds.size;
+    if(!count)return;
+
+    const message=selectAllMode
+      ? `Excluir TODOS os ${count} contatos desta empresa? Esta ação não pode ser desfeita.`
+      : `Excluir ${count} contato${count===1?"":"s"} selecionado${count===1?"":"s"}? Esta ação não pode ser desfeita.`;
+
+    if(!confirm(message))return;
+
+    const btn=$("#deleteSelectedContactsBtn");
+    btn.disabled=true;
+    try{
+      const result=await api("/contacts/delete-selected",{
+        method:"POST",
+        body:JSON.stringify({
+          all:selectAllMode,
+          ids:selectAllMode?[]:Array.from(selectedContactIds)
+        })
+      });
+
+      if(result.failed){
+        alert(`${result.deleted||0} contato(s) excluído(s). ${result.failed} não puderam ser excluídos.`);
+      }
+      await contacts();
+    }catch(err){
+      alert(err.message||"Não foi possível excluir os contatos selecionados.");
+      btn.disabled=false;
+    }
+  });
 
   document.querySelectorAll(".start-chat-contact").forEach(btn=>{
     btn.onclick=async()=>{
@@ -1287,8 +1361,21 @@ $("#settingsClose").onclick=closeSettings;
 $("#settingsBackdrop").onclick=closeSettings;
 
 function formatPhoneBR(value){
-  const digits=String(value||"").replace(/\D/g,"").slice(0,11);
+  const digits=String(value||"").replace(/\D/g,"").slice(0,13);
   if(!digits)return "";
+
+  if(digits.length===12 || digits.length===13){
+    const ddi=digits.slice(0,2);
+    const ddd=digits.slice(2,4);
+    const local=digits.slice(4);
+    if(local.length===8){
+      return `${ddi} (${ddd}) ${local.slice(0,4)}-${local.slice(4)}`;
+    }
+    if(local.length===9){
+      return `${ddi} (${ddd}) ${local.slice(0,5)}-${local.slice(5)}`;
+    }
+  }
+
   if(digits.length<=2)return digits.length===1?`(${digits}`:`(${digits})`;
   const ddd=digits.slice(0,2);
   const local=digits.slice(2);
