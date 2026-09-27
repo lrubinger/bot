@@ -26,7 +26,7 @@ function menuIcon(name){
   const paths={
     dashboard:'<path d="M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z"/>',
     link:'<path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1"/>',
-    chat:'<path d="M4 5h16v11H9l-5 4V5Zm4 4h8M8 12h5"/>',
+    chat:'<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.4 0-2.73-.34-3.9-.95L3 21l1.98-5.28A8.46 8.46 0 0 1 3.5 11.5 8.5 8.5 0 1 1 21 11.5Z"/>',
     contacts:'<path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8-1a2.5 2.5 0 1 0 0-5M3 19a5 5 0 0 1 10 0M14 14a4 4 0 0 1 7 3"/>',
     layers:'<path d="m12 3 9 5-9 5-9-5 9-5Zm-9 10 9 5 9-5M3 17l9 5 9-5"/>',
     columns:'<path d="M4 4h5v16H4V4Zm11 0h5v10h-5V4Zm0 14h5v2h-5v-2Z"/>',
@@ -374,9 +374,27 @@ async function contacts(){
               <td>${esc(c.email||"")}</td>
               <td>${esc(formatPhoneBR(c.number||""))}</td>
               <td>
-                <div class="user-actions">
-                  <button class="ghost edit-contact-row" data-id="${c.id}">Editar</button>
-                  <button class="ghost danger delete-contact-row" data-id="${c.id}" data-name="${esc(c.name||"contato")}">Excluir</button>
+                <div class="contact-icon-actions">
+                  <button class="contact-icon-btn start-chat-contact" data-id="${c.id}" title="Iniciar conversa" aria-label="Iniciar conversa">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.4 0-2.73-.34-3.9-.95L3 21l1.98-5.28A8.46 8.46 0 0 1 3.5 11.5 8.5 8.5 0 1 1 21 11.5Z"/>
+                    </svg>
+                  </button>
+                  <button class="contact-icon-btn edit-contact-row" data-id="${c.id}" title="Editar contato" aria-label="Editar contato">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 20h9"/>
+                      <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"/>
+                    </svg>
+                  </button>
+                  <button class="contact-icon-btn danger delete-contact-row" data-id="${c.id}" data-name="${esc(c.name||"contato")}" title="Excluir contato" aria-label="Excluir contato">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M3 6h18"/>
+                      <path d="M8 6V4h8v2"/>
+                      <path d="M19 6l-1 14H6L5 6"/>
+                      <path d="M10 11v6"/>
+                      <path d="M14 11v6"/>
+                    </svg>
+                  </button>
                 </div>
               </td>
             </tr>`).join("")}
@@ -386,6 +404,24 @@ async function contacts(){
   `);
 
   const findContact=id=>list.find(item=>String(item.id)===String(id));
+
+  document.querySelectorAll(".start-chat-contact").forEach(btn=>{
+    btn.onclick=async()=>{
+      btn.disabled=true;
+      try{
+        const result=await api("/contacts/"+btn.dataset.id+"/start-conversation",{
+          method:"POST",
+          body:"{}"
+        });
+        localStorage.setItem("pp_open_ticket",String(result.ticketId));
+        await navigate("tickets");
+      }catch(err){
+        alert(err.message||"Não foi possível iniciar a conversa.");
+      }finally{
+        btn.disabled=false;
+      }
+    };
+  });
 
   document.querySelectorAll(".edit-contact-row").forEach(btn=>{
     btn.onclick=()=>{
@@ -777,8 +813,56 @@ async function tickets(){
   setTitle("Atendimentos");
   const data=await api('/tickets?pageNumber=1&status=open&showAll=true&queueIds=[]&tags=[]&users=[]');
   const list=data.tickets||[];
-  content(`<div class="table-wrap"><table><thead><tr><th>Contato</th><th>Status</th><th>Última mensagem</th></tr></thead><tbody>${list.map(t=>`<tr class="clickable ticket-row" data-id="${t.id}"><td>${esc(t.contact?.name||t.contactId)}</td><td>${esc(t.status)}</td><td>${esc(t.lastMessage||"")}</td></tr>`).join("")}</tbody></table></div>`);
-  document.querySelectorAll(".ticket-row").forEach(r=>r.onclick=()=>openTicket(r.dataset.id));
+
+  content(`
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Contato</th><th>Status</th><th>Última mensagem</th><th>Conversa</th></tr>
+        </thead>
+        <tbody>
+          ${list.map(t=>`
+            <tr class="clickable ticket-row" data-id="${t.id}">
+              <td>${esc(t.contact?.name||t.contactId)}</td>
+              <td>${esc(t.status)}</td>
+              <td>${esc(t.lastMessage||"")}</td>
+              <td>
+                <button class="contact-icon-btn ticket-chat-btn" data-id="${t.id}" title="Abrir conversa" aria-label="Abrir conversa">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.4 0-2.73-.34-3.9-.95L3 21l1.98-5.28A8.46 8.46 0 0 1 3.5 11.5 8.5 8.5 0 1 1 21 11.5Z"/>
+                  </svg>
+                </button>
+              </td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+  `);
+
+  document.querySelectorAll(".ticket-row").forEach(r=>{
+    r.onclick=e=>{
+      if(e.target.closest(".ticket-chat-btn"))return;
+      openTicket(r.dataset.id);
+    };
+  });
+
+  document.querySelectorAll(".ticket-chat-btn").forEach(btn=>{
+    btn.onclick=e=>{
+      e.stopPropagation();
+      openTicket(btn.dataset.id);
+    };
+  });
+
+  const pendingTicketId=localStorage.getItem("pp_open_ticket");
+  if(pendingTicketId){
+    localStorage.removeItem("pp_open_ticket");
+    const match=list.find(t=>String(t.id)===String(pendingTicketId));
+    if(match){
+      setTimeout(()=>openTicket(pendingTicketId),80);
+    }else{
+      setTimeout(()=>openTicket(pendingTicketId),80);
+    }
+  }
 }
 async function openTicket(id){
   const data=await api("/messages/"+id+"?pageNumber=1"); const msgs=data.messages||[];
