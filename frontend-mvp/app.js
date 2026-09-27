@@ -1135,6 +1135,35 @@ function bindTicketList(){
   });
 }
 
+function filterTicketList(){
+  const query=String($("#ticketSearch")?.value||"").trim().toLowerCase();
+  const status=$("#ticketStatusFilter")?.value||"all";
+
+  const filtered=ticketsCache.filter(t=>{
+    const name=String(t.contact?.name||"").toLowerCase();
+    const number=String(t.contact?.number||"").toLowerCase();
+    const last=String(t.lastMessage||"").toLowerCase();
+
+    const matchesText=!query ||
+      name.includes(query) ||
+      number.includes(query) ||
+      last.includes(query);
+
+    const matchesStatus=
+      status==="all" ||
+      status==="archived" ||
+      String(t.status||"")===status;
+
+    return matchesText && matchesStatus;
+  });
+
+  const listEl=$("#ticketConversationList");
+  if(listEl){
+    listEl.innerHTML=renderTicketList(filtered);
+    bindTicketList();
+  }
+}
+
 async function refreshTicketsList(){
   if(state.page!=="tickets")return;
   try{
