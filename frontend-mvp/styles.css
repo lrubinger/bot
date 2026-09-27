@@ -1005,3 +1005,76 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
 .user-edit-grid{
   margin-top:16px;
 }
+
+
+/* Temporary password modal */
+.temporary-password-modal{
+  display:grid;
+  gap:0;
+}
+.temporary-password-modal h2{
+  margin:0 0 8px;
+  font-family:inherit;
+  font-size:23px;
+  font-weight:800;
+  color:var(--navy);
+}
+.temporary-password-modal>p{
+  margin:0 0 25px;
+  color:#68718d;
+  font-size:16px;
+  line-height:1.5;
+}
+.temporary-password-fields{
+  display:grid;
+  gap:20px;
+}
+.temporary-password-fields label{
+  display:grid;
+  gap:7px;
+}
+.temporary-password-fields label span{
+  color:var(--navy);
+  font-size:15px;
+  font-weight:800;
+}
+.temporary-password-fields input{
+  width:100%;
+  min-height:46px;
+  border:1px solid #ccd4e7;
+  background:#eef1fb;
+  color:var(--text);
+  border-radius:10px;
+  padding:10px 14px;
+  outline:none;
+  font:inherit;
+}
+.temporary-password-fields input:focus{
+  border-color:#728af0;
+  box-shadow:0 0 0 3px rgba(96,119,239,.18);
+}
+.temporary-password-status{
+  min-height:20px;
+  margin-top:11px;
+  color:#b84949;
+  font-size:12px;
+}
+.temporary-password-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  margin-top:4px;
+}
+.temporary-password-actions .ghost,
+.temporary-password-actions .primary{
+  min-height:44px;
+  padding:0 20px;
+  border-radius:10px;
+  font-weight:700;
+}
+.temporary-password-actions.forced{
+  justify-content:flex-end;
+}
+.forced-password-change{
+  max-width:610px;
+}
