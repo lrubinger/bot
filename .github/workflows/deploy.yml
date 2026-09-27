@@ -65,6 +65,13 @@ jobs:
           printf 'GOOGLE_CLIENT_SECRET=%s\n' "$GOOGLE_CLIENT_SECRET" >> "$ENV_FILE"
           printf 'GOOGLE_CONTACTS_REDIRECT_URI=https://bot.portoplan.com.br/api/google/contacts/callback\n' >> "$ENV_FILE"
 
+          TMP_ENV="$(mktemp)"
+          grep -v '^PUBLIC_BACKEND_URL=' "$ENV_FILE" | grep -v '^FRONTEND_URL=' "$ENV_FILE" > "$TMP_ENV" || true
+          cat "$TMP_ENV" > "$ENV_FILE"
+          rm -f "$TMP_ENV"
+          printf 'PUBLIC_BACKEND_URL=https://bot.portoplan.com.br/api\n' >> "$ENV_FILE"
+          printf 'FRONTEND_URL=https://bot.portoplan.com.br\n' >> "$ENV_FILE"
+
           cd "$APP_DIR"
           git reset --hard HEAD
           git clean -fd -e backend/.env -e frontend/.env -e frontend/.env.local
