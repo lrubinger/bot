@@ -144,9 +144,15 @@ function setTitle(t){
   document.title = `${browserTitle} | PortoPlan`;
 }
 function content(html){$("#content").innerHTML=html}
+let forcePasswordChangeOpen=false;
 function modal(html){$("#modalBody").innerHTML=html;$("#modal").classList.remove("hidden")}
-function closeModal(){ $("#modal").classList.add("hidden"); $("#modalBody").innerHTML="" }
-$("#modalClose").onclick=closeModal; $("#modal").onclick=e=>{if(e.target.id==="modal")closeModal()}
+function closeModal(){
+  if(forcePasswordChangeOpen)return;
+  $("#modal").classList.add("hidden");
+  $("#modalBody").innerHTML="";
+}
+$("#modalClose").onclick=closeModal;
+$("#modal").onclick=e=>{if(e.target.id==="modal")closeModal()}
 
 async function loadPage(){
   const titles={dashboard:"Dashboard",connections:"Conectar WhatsApp",contacts:"Contatos",queues:"Filas",tickets:"Atendimentos",kanban:"Kanban",users:"Usuários","internal-chat":"Chat interno",chat:"Chat interno"};
@@ -474,7 +480,7 @@ async function users(){
               <td>${esc(u.super?"Superusuário":u.profile==="admin"?"Administrador":"Usuário")}</td>
               <td>
                 ${canManage && !u.super
-                  ? `<button class="ghost temp-password-user" data-id="${u.id}">Criar/alterar</button>`
+                  ? `<button class="ghost temp-password-user" data-id="${u.id}">🔑 Senha temporária</button>`
                   : '<span class="muted">—</span>'}
               </td>
               <td>
@@ -495,7 +501,7 @@ async function users(){
 
   const findUser=id=>list.find(u=>String(u.id)===String(id));
 
-  const openEditUser=(id,focusPassword=false)=>{
+  const openEditUser=id=>{
     const u=findUser(id);
     if(!u)return;
     const editingSelf=String(u.id)===String(state.user?.id);
@@ -519,10 +525,8 @@ async function users(){
             <option value="admin" ${u.profile==="admin"?"selected":""}>Administrador</option>
           </select>
         </label>
-        <label class="full"><span>Senha temporária</span><input id="editUserPassword" type="text" minlength="8" placeholder="Preencha para criar ou alterar" /></label>
-        ${editingSelf?'<label class="full"><span>Senha atual</span><input id="editUserCurrentPassword" type="password" placeholder="Obrigatória para alterar seu e-mail ou senha" /></label>':""}
+        ${editingSelf?'<label class="full"><span>Senha atual</span><input id="editUserCurrentPassword" type="password" placeholder="Obrigatória para alterar seu e-mail" /></label>':""}
       </div>
-      <p class="settings-help">A senha temporária não é exibida depois de salva. Informe uma nova senha somente quando precisar redefinir o acesso do usuário.</p>
       <div class="settings-actions">
         <button class="primary" id="saveUserEdit" type="button">Salvar usuário</button>
         <span id="editUserStatus" class="small"></span>
@@ -531,16 +535,9 @@ async function users(){
 
     const phone=$("#editUserPhone");
     if(phone) phone.addEventListener("input",e=>{e.target.value=formatPhoneBR(e.target.value);});
-    if(focusPassword) setTimeout(()=>$("#editUserPassword")?.focus(),50);
 
     $("#saveUserEdit").onclick=async()=>{
       const status=$("#editUserStatus");
-      const password=$("#editUserPassword").value.trim();
-      if(password && password.length<8){
-        status.textContent="A senha temporária deve ter no mínimo 8 caracteres.";
-        return;
-      }
-
       const payload={
         name:$("#editUserName").value.trim(),
         phone:$("#editUserPhone").value.replace(/\D/g,""),
@@ -552,7 +549,6 @@ async function users(){
         payload.profile=$("#editUserProfile").value;
       }
 
-      if(password) payload.password=password;
       if(editingSelf && $("#editUserCurrentPassword")){
         payload.currentPassword=$("#editUserCurrentPassword").value;
       }
@@ -573,8 +569,67 @@ async function users(){
     };
   };
 
-  document.querySelectorAll(".edit-user-row").forEach(btn=>btn.onclick=()=>openEditUser(btn.dataset.id,false));
-  document.querySelectorAll(".temp-password-user").forEach(btn=>btn.onclick=()=>openEditUser(btn.dataset.id,true));
+  const openTemporaryPassword=id=>{
+    const u=findUser(id);
+    if(!u)return;
+
+    modal(`
+      <div class="temporary-password-modal">
+        <h2>Definir senha temporária</h2>
+        <p>Cliente: ${esc(u.name||u.email||"Usuário")}. A senha atual será substituída e, no próximo acesso, o cliente deverá criar uma senha pessoal.</p>
+
+        <div class="temporary-password-fields">
+          <label>
+            <span>Senha temporária</span>
+            <input id="temporaryPassword" type="password" minlength="8" placeholder="Mínimo de 8 caracteres" autocomplete="new-password" />
+          </label>
+          <label>
+            <span>Confirmar senha temporária</span>
+            <input id="temporaryPasswordConfirm" type="password" minlength="8" autocomplete="new-password" />
+          </label>
+        </div>
+
+        <div id="temporaryPasswordStatus" class="temporary-password-status"></div>
+
+        <div class="temporary-password-actions">
+          <button class="ghost" id="cancelTemporaryPassword" type="button">Cancelar</button>
+          <button class="primary" id="saveTemporaryPassword" type="button">Definir senha temporária</button>
+        </div>
+      </div>
+    `);
+
+    setTimeout(()=>$("#temporaryPassword")?.focus(),50);
+    $("#cancelTemporaryPassword").onclick=closeModal;
+    $("#saveTemporaryPassword").onclick=async()=>{
+      const password=$("#temporaryPassword").value;
+      const confirmation=$("#temporaryPasswordConfirm").value;
+      const status=$("#temporaryPasswordStatus");
+
+      if(password.length<8){
+        status.textContent="A senha temporária deve ter no mínimo 8 caracteres.";
+        return;
+      }
+      if(password!==confirmation){
+        status.textContent="As senhas temporárias não conferem.";
+        return;
+      }
+
+      status.textContent="Salvando...";
+      try{
+        await api("/users/"+u.id+"/temporary-password",{
+          method:"POST",
+          body:JSON.stringify({password,confirmation})
+        });
+        status.textContent="Senha temporária definida.";
+        setTimeout(()=>{closeModal();users();},500);
+      }catch(err){
+        status.textContent=err.message||"Não foi possível definir a senha temporária.";
+      }
+    };
+  };
+
+  document.querySelectorAll(".edit-user-row").forEach(btn=>btn.onclick=()=>openEditUser(btn.dataset.id));
+  document.querySelectorAll(".temp-password-user").forEach(btn=>btn.onclick=()=>openTemporaryPassword(btn.dataset.id));
   document.querySelectorAll(".delete-user-row").forEach(btn=>{
     btn.onclick=async()=>{
       const name=btn.dataset.name||"este usuário";
@@ -588,6 +643,72 @@ async function users(){
     };
   });
 }
+
+function openForcedPasswordChange(){
+  if(!state.user?.mustChangePassword)return;
+
+  forcePasswordChangeOpen=true;
+  $("#modalClose").classList.add("hidden");
+
+  modal(`
+    <div class="temporary-password-modal forced-password-change">
+      <h2>Crie sua nova senha</h2>
+      <p>Você acessou com uma senha temporária. Antes de continuar, crie uma senha pessoal para sua conta.</p>
+
+      <div class="temporary-password-fields">
+        <label>
+          <span>Nova senha</span>
+          <input id="forcedNewPassword" type="password" minlength="8" placeholder="Mínimo de 8 caracteres" autocomplete="new-password" />
+        </label>
+        <label>
+          <span>Confirmar nova senha</span>
+          <input id="forcedNewPasswordConfirm" type="password" minlength="8" autocomplete="new-password" />
+        </label>
+      </div>
+
+      <div id="forcedPasswordStatus" class="temporary-password-status"></div>
+
+      <div class="temporary-password-actions forced">
+        <button class="primary" id="saveForcedPassword" type="button">Salvar nova senha</button>
+      </div>
+    </div>
+  `);
+
+  setTimeout(()=>$("#forcedNewPassword")?.focus(),50);
+
+  $("#saveForcedPassword").onclick=async()=>{
+    const password=$("#forcedNewPassword").value;
+    const confirmation=$("#forcedNewPasswordConfirm").value;
+    const status=$("#forcedPasswordStatus");
+
+    if(password.length<8){
+      status.textContent="A nova senha deve ter no mínimo 8 caracteres.";
+      return;
+    }
+    if(password!==confirmation){
+      status.textContent="As senhas não conferem.";
+      return;
+    }
+
+    status.textContent="Salvando...";
+    try{
+      await api("/users/change-temporary-password",{
+        method:"POST",
+        body:JSON.stringify({password,confirmation})
+      });
+
+      state.user={...state.user,mustChangePassword:false};
+      localStorage.setItem("pp_user",JSON.stringify(state.user));
+      forcePasswordChangeOpen=false;
+      $("#modalClose").classList.remove("hidden");
+      $("#modal").classList.add("hidden");
+      $("#modalBody").innerHTML="";
+    }catch(err){
+      status.textContent=err.message||"Não foi possível alterar a senha.";
+    }
+  };
+}
+
 async function tickets(){
   setTitle("Atendimentos");
   const data=await api('/tickets?pageNumber=1&status=open&showAll=true&queueIds=[]&tags=[]&users=[]');
@@ -1293,5 +1414,6 @@ function initApp(){
   loadPage();
   refreshSupportUnread();
   setInterval(refreshSupportUnread,10000);
+  if(state.user?.mustChangePassword) setTimeout(openForcedPasswordChange,80);
 }
 if(state.token){loginView(false);initApp()} else loginView(true);
