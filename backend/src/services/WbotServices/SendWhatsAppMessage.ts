@@ -56,10 +56,12 @@ const SendWhatsAppMessage = async ({
     );
     await ticket.update({ lastMessage: formatBody(body, ticket.contact) });
     return sentMessage;
-  } catch (err) {
+  } catch (err: any) {
     Sentry.captureException(err);
     console.log(err);
-    throw new AppError("ERR_SENDING_WAPP_MSG");
+    if (err instanceof AppError) throw err;
+    const detail = String(err?.message || err || "erro desconhecido");
+    throw new AppError(`Não foi possível enviar a mensagem pelo WhatsApp: ${detail}`, 400);
   }
 };
 
