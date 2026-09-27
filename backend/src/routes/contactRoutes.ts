@@ -6,9 +6,21 @@ import uploadConfig from "../config/upload";
 import * as ContactController from "../controllers/ContactController";
 import * as ImportPhoneContactsController from "../controllers/ImportPhoneContactsController";
 import * as ContactCsvController from "../controllers/ContactCsvController";
+import * as GoogleContactsController from "../controllers/GoogleContactsController";
 
 const contactRoutes = express.Router();
 const upload = multer(uploadConfig);
+
+contactRoutes.get(
+  "/google/contacts/auth-url",
+  isAuth,
+  GoogleContactsController.authUrl
+);
+
+contactRoutes.get(
+  "/google/contacts/callback",
+  GoogleContactsController.callback
+);
 
 contactRoutes.post(
   "/contacts/import",
