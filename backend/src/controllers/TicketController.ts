@@ -21,6 +21,7 @@ type IndexQuery = {
   queueIds: string;
   tags: string;
   users: string;
+  archived?: string;
 };
 
 interface TicketData {
@@ -45,7 +46,8 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     queueIds: queueIdsStringified,
     tags: tagIdsStringified,
     users: userIdsStringified,
-    withUnreadMessages
+    withUnreadMessages,
+    archived
   } = req.query as IndexQuery;
 
   const userId = req.user.id;
@@ -80,8 +82,7 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     queueIds,
     withUnreadMessages,
     companyId,
-
-
+    archived
   });
   return res.status(200).json({ tickets, count, hasMore });
 };
@@ -193,6 +194,64 @@ export const update = async (
     companyId
   });
 
+
+  return res.status(200).json(ticket);
+};
+
+export const markUnread = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { companyId } = req.user;
+  const ticket = await ShowTicketService(ticketId, companyId);
+
+  const unreadMessages = Math.max(1, Number(ticket.unreadMessages || 0));
+  await ticket.update({ unreadMessages });
+
+  const io = getIO();
+  io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-ticket`, {
+    action: "update",
+    ticket
+  });
+
+  return res.status(200).json(ticket);
+};
+
+export const archive = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { companyId } = req.user;
+  const ticket = await ShowTicketService(ticketId, companyId);
+
+  await ticket.update({ archived: true });
+
+  const io = getIO();
+  io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-ticket`, {
+    action: "update",
+    ticket
+  });
+
+  return res.status(200).json(ticket);
+};
+
+export const unarchive = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { companyId } = req.user;
+  const ticket = await ShowTicketService(ticketId, companyId);
+
+  await ticket.update({ archived: false });
+
+  const io = getIO();
+  io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-ticket`, {
+    action: "update",
+    ticket
+  });
 
   return res.status(200).json(ticket);
 };
