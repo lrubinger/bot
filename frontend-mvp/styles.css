@@ -1167,3 +1167,46 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
   opacity:.45;
   cursor:not-allowed;
 }
+
+
+/* Contact toolbar actions */
+.contacts-toolbar-actions{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:10px;
+}
+.toolbar-icon-btn{
+  width:42px;
+  height:42px;
+  min-width:42px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid #e1e5ec;
+  border-radius:50%;
+  background:#f2f3f5;
+  color:#3d424a;
+  cursor:pointer;
+  padding:0;
+  transition:background .16s ease,border-color .16s ease,transform .16s ease;
+}
+.toolbar-icon-btn:hover{
+  background:#e8eaf0;
+  border-color:#cfd4de;
+  transform:translateY(-1px);
+}
+.toolbar-icon-btn:disabled{
+  opacity:.55;
+  cursor:wait;
+  transform:none;
+}
+.toolbar-icon-btn svg{
+  width:22px;
+  height:22px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:2;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
