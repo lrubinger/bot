@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import { getIO } from "../libs/socket";
+import sequelize from "../database";
+import { QueryTypes } from "sequelize";
 
 import CheckSettingsHelper from "../helpers/CheckSettings";
 import AppError from "../errors/AppError";
@@ -83,10 +85,10 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   const io = getIO();
   io.emit(`company-${userCompanyId}-user`, {
     action: "create",
-    user
+    user: responseUser
   });
 
-  return res.status(200).json(user);
+  return res.status(200).json(responseUser);
 };
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
@@ -94,7 +96,22 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
 
   const user = await ShowUserService(userId);
 
-  return res.status(200).json(user);
+  const rows = await sequelize.query(
+    `SELECT "phone", "address", "addressStreet", "addressNumber",
+            "addressComplement", "addressCity", "addressState", "addressZipCode"
+       FROM "Users"
+      WHERE "id" = :userId
+      LIMIT 1`,
+    {
+      replacements: { userId: +userId },
+      type: QueryTypes.SELECT
+    }
+  ) as any[];
+
+  return res.status(200).json({
+    ...(user.toJSON() as any),
+    ...(rows[0] || {})
+  });
 };
 
 export const update = async (
@@ -180,6 +197,62 @@ export const update = async (
     companyId,
     requestUserId: +requestUserId
   });
+
+  const hasProfileFields =
+    userData.phone !== undefined ||
+    userData.address !== undefined ||
+    userData.addressStreet !== undefined ||
+    userData.addressNumber !== undefined ||
+    userData.addressComplement !== undefined ||
+    userData.addressCity !== undefined ||
+    userData.addressState !== undefined ||
+    userData.addressZipCode !== undefined;
+
+  if (hasProfileFields) {
+    await sequelize.query(
+      `UPDATE "Users"
+          SET "phone" = COALESCE(:phone, "phone"),
+              "address" = COALESCE(:address, "address"),
+              "addressStreet" = COALESCE(:addressStreet, "addressStreet"),
+              "addressNumber" = COALESCE(:addressNumber, "addressNumber"),
+              "addressComplement" = COALESCE(:addressComplement, "addressComplement"),
+              "addressCity" = COALESCE(:addressCity, "addressCity"),
+              "addressState" = COALESCE(:addressState, "addressState"),
+              "addressZipCode" = COALESCE(:addressZipCode, "addressZipCode"),
+              "updatedAt" = NOW()
+        WHERE "id" = :userId`,
+      {
+        replacements: {
+          userId: +userId,
+          phone: userData.phone !== undefined ? userData.phone : null,
+          address: userData.address !== undefined ? userData.address : null,
+          addressStreet: userData.addressStreet !== undefined ? userData.addressStreet : null,
+          addressNumber: userData.addressNumber !== undefined ? userData.addressNumber : null,
+          addressComplement: userData.addressComplement !== undefined ? userData.addressComplement : null,
+          addressCity: userData.addressCity !== undefined ? userData.addressCity : null,
+          addressState: userData.addressState !== undefined ? userData.addressState : null,
+          addressZipCode: userData.addressZipCode !== undefined ? userData.addressZipCode : null
+        }
+      }
+    );
+  }
+
+  const persistedRows = await sequelize.query(
+    `SELECT "phone", "address", "addressStreet", "addressNumber",
+            "addressComplement", "addressCity", "addressState", "addressZipCode"
+       FROM "Users"
+      WHERE "id" = :userId
+      LIMIT 1`,
+    {
+      replacements: { userId: +userId },
+      type: QueryTypes.SELECT
+    }
+  ) as any[];
+
+  const responseUser = {
+    ...(user as any),
+    ...(persistedRows[0] || {})
+  };
 
   const io = getIO();
   io.emit(`company-${target.companyId}-user`, {
