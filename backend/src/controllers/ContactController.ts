@@ -217,6 +217,59 @@ export const startConversation = async (
   });
 };
 
+export const removeSelected = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId } = req.user;
+  const all = req.body?.all === true;
+  const ids = Array.isArray(req.body?.ids)
+    ? req.body.ids.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id))
+    : [];
+
+  if (!all && ids.length === 0) {
+    throw new AppError("Selecione ao menos um contato.", 400);
+  }
+
+  const where: any = { companyId };
+  if (!all) {
+    where.id = { [Op.in]: ids };
+  }
+
+  const contacts = await (await import("../models/Contact")).default.findAll({
+    where,
+    attributes: ["id"]
+  });
+
+  let deleted = 0;
+  const failed: number[] = [];
+
+  for (const contact of contacts) {
+    try {
+      await DeleteContactService(String(contact.id));
+      deleted += 1;
+    } catch (_) {
+      failed.push(contact.id);
+    }
+  }
+
+  const io = getIO();
+  contacts.forEach(contact => {
+    if (!failed.includes(contact.id)) {
+      io.emit(`company-${companyId}-contact`, {
+        action: "delete",
+        contactId: contact.id
+      });
+    }
+  });
+
+  return res.status(200).json({
+    deleted,
+    failed: failed.length,
+    requested: all ? contacts.length : ids.length
+  });
+};
+
 export const remove = async (
   req: Request,
   res: Response
