@@ -29,6 +29,12 @@ contactRoutes.post(
 );
 
 contactRoutes.post(
+  "/contacts/delete-selected",
+  isAuth,
+  ContactController.removeSelected
+);
+
+contactRoutes.post(
   "/contacts/import-csv",
   isAuth,
   upload.single("file"),
