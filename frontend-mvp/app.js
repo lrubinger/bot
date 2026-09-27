@@ -357,6 +357,10 @@ async function contacts(){
   content(`
     <div class="toolbar">
       <button class="primary" id="importContactsBtn">Importar contatos</button>
+      <button class="ghost google-contacts-btn" id="importGoogleContactsBtn" type="button">
+        <span class="google-g" aria-hidden="true">G</span>
+        Importar do Google
+      </button>
       <button class="ghost" id="exportContactsBtn">Exportar contatos</button>
       <input id="importContactsFile" type="file" accept=".csv,text/csv" class="hidden" />
       <span id="contactsImportStatus" class="small"></span>
@@ -480,6 +484,36 @@ async function contacts(){
   });
 
   $("#importContactsBtn").onclick=()=>$("#importContactsFile").click();
+
+  $("#importGoogleContactsBtn").onclick=async()=>{
+    const btn=$("#importGoogleContactsBtn");
+    const status=$("#contactsImportStatus");
+    btn.disabled=true;
+    status.textContent="Abrindo autorização do Google...";
+    try{
+      const result=await api("/google/contacts/auth-url");
+      if(!result?.authUrl) throw new Error("Não foi possível iniciar a autorização do Google.");
+      window.location.href=result.authUrl;
+    }catch(err){
+      status.textContent=err.message||"Não foi possível conectar ao Google Contacts.";
+      btn.disabled=false;
+    }
+  };
+
+  const googleParams=new URLSearchParams(window.location.search);
+  const googleResult=googleParams.get("googleContacts");
+  if(googleResult){
+    const status=$("#contactsImportStatus");
+    if(googleResult==="success"){
+      const created=Number(googleParams.get("created")||0);
+      const updated=Number(googleParams.get("updated")||0);
+      const ignored=Number(googleParams.get("ignored")||0);
+      status.textContent=`Google Contacts importado: ${created} novo${created===1?"":"s"}, ${updated} atualizado${updated===1?"":"s"}, ${ignored} ignorado${ignored===1?"":"s"}.`;
+    }else{
+      status.textContent="Falha no Google Contacts: "+(googleParams.get("message")||"autorização não concluída.");
+    }
+    history.replaceState({},document.title,window.location.pathname);
+  }
 
   $("#importContactsFile").onchange=async e=>{
     const file=e.target.files?.[0];
@@ -1557,6 +1591,8 @@ async function showProfileQr(id){
 
 function initApp(){
   $("#userLine").textContent = state.user ? `${state.user.name||""} · ${state.user.email||""}` : "";
+  const startupParams=new URLSearchParams(window.location.search);
+  if(startupParams.get("googleContacts")) state.page="contacts";
   applySidebarState();
   renderMenu();
   loadPage();
