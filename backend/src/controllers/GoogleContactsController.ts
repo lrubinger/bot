@@ -249,39 +249,43 @@ export const authUrl = async (
 export const callback = async (
   req: Request,
   res: Response
-): Promise<Response> => {
+): Promise<void> => {
   const frontendUrl = clean(process.env.FRONTEND_URL || "https://bot.portoplan.com.br").replace(/\/$/, "");
   const { clientId, clientSecret, redirectUri } = requiredGoogleConfig();
 
   const error = clean(req.query.error);
   if (error) {
-    return res.redirect(
+    res.redirect(
       `${frontendUrl}/?googleContacts=error&message=${encodeURIComponent(error)}`
     );
+    return;
   }
 
   const code = clean(req.query.code);
   const state = clean(req.query.state);
 
   if (!code || !state) {
-    return res.redirect(
+    res.redirect(
       `${frontendUrl}/?googleContacts=error&message=${encodeURIComponent("Autorização incompleta.")}`
     );
+    return;
   }
 
   let payload: any;
   try {
     payload = verify(state, authConfig.secret);
   } catch (_) {
-    return res.redirect(
+    res.redirect(
       `${frontendUrl}/?googleContacts=error&message=${encodeURIComponent("Autorização expirada ou inválida.")}`
     );
+    return;
   }
 
   if (payload?.purpose !== "google-contacts-import" || !payload?.companyId) {
-    return res.redirect(
+    res.redirect(
       `${frontendUrl}/?googleContacts=error&message=${encodeURIComponent("Autorização inválida.")}`
     );
+    return;
   }
 
   try {
@@ -343,14 +347,16 @@ export const callback = async (
       pageToken = clean(data?.nextPageToken);
     } while (pageToken);
 
-    return res.redirect(
+    res.redirect(
       `${frontendUrl}/?googleContacts=success&created=${created}&updated=${updated}&ignored=${ignored}`
     );
+    return;
   } catch (err: any) {
-    return res.redirect(
+    res.redirect(
       `${frontendUrl}/?googleContacts=error&message=${encodeURIComponent(
         err?.message || "Não foi possível importar os contatos do Google."
       )}`
     );
+    return;
   }
 };
