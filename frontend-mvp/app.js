@@ -281,8 +281,12 @@ async function showQr(id){
     setStatus(force?"Gerando um novo QR Code...":"Iniciando sessão...");
     try{
       await api("/whatsappsession/"+id,{method:force?"PUT":"POST"});
+      return true;
     }catch(e){
-      setStatus("Aguardando o QR Code do WhatsApp...");
+      setStatus(e.message||"Não foi possível iniciar a sessão do WhatsApp.","warning");
+      const hint=$("#qrHint");
+      if(hint) hint.textContent="Verifique a conexão e tente gerar um novo QR Code.";
+      return false;
     }
   };
 
