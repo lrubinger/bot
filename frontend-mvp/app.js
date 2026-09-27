@@ -155,6 +155,7 @@ $("#modalClose").onclick=closeModal;
 $("#modal").onclick=e=>{if(e.target.id==="modal")closeModal()}
 
 async function loadPage(){
+  document.body.classList.toggle("tickets-page",state.page==="tickets");
   const titles={dashboard:"Dashboard",connections:"Conectar WhatsApp",contacts:"Contatos",queues:"Filas",tickets:"Atendimentos",kanban:"Kanban",users:"Usuários","internal-chat":"Chat interno",chat:"Chat interno"};
   if(titles[state.page]) setTitle(titles[state.page]);
   try{
@@ -1098,7 +1099,7 @@ async function tickets(){
   ticketsCache=await fetchTicketList();
 
   content(`
-    <div class="wa-inbox ${ticketDetailsCollapsed?"details-collapsed":""}" id="waInbox">
+    <div class="wa-inbox ${ticketDetailsCollapsed?"details-collapsed":""}" id="waInbox" style="--conversation-width:${localStorage.getItem("pp_ticket_list_width")||"330"}px">
       <aside class="wa-conversations-panel">
         <div class="wa-conversations-head">
           <div>
@@ -1116,6 +1117,7 @@ async function tickets(){
           </div>
         </div>
         <div class="wa-conversations-list" id="ticketConversationList">${renderTicketList(ticketsCache)}</div>
+        <div class="wa-column-resizer" id="ticketListResizer" title="Arraste para redimensionar"></div>
       </aside>
 
       <section class="wa-chat-panel" id="ticketChatPanel">
@@ -1140,6 +1142,32 @@ async function tickets(){
   bindTicketList();
   $("#ticketSearch").oninput=filterTicketList;
   $("#ticketStatusFilter").onchange=filterTicketList;
+
+  const resizer=$("#ticketListResizer");
+  if(resizer){
+    resizer.onpointerdown=e=>{
+      e.preventDefault();
+      const inbox=$("#waInbox");
+      const startX=e.clientX;
+      const startWidth=parseInt(getComputedStyle(inbox).getPropertyValue("--conversation-width"))||330;
+      resizer.setPointerCapture?.(e.pointerId);
+
+      const move=ev=>{
+        const next=Math.max(240,Math.min(520,startWidth+(ev.clientX-startX)));
+        inbox.style.setProperty("--conversation-width",next+"px");
+      };
+      const up=ev=>{
+        const current=parseInt(getComputedStyle(inbox).getPropertyValue("--conversation-width"))||330;
+        localStorage.setItem("pp_ticket_list_width",String(current));
+        resizer.releasePointerCapture?.(ev.pointerId);
+        resizer.removeEventListener("pointermove",move);
+        resizer.removeEventListener("pointerup",up);
+      };
+      resizer.addEventListener("pointermove",move);
+      resizer.addEventListener("pointerup",up);
+    };
+  }
+
   $("#ticketDetailsToggle").onclick=()=>{
     ticketDetailsCollapsed=!ticketDetailsCollapsed;
     localStorage.setItem("pp_ticket_details_collapsed",ticketDetailsCollapsed?"1":"0");
