@@ -15,6 +15,12 @@ interface UserData {
   whatsappId?: number;
   phone?: string;
   address?: string;
+  addressStreet?: string;
+  addressNumber?: string;
+  addressComplement?: string;
+  addressCity?: string;
+  addressState?: string;
+  addressZipCode?: string;
 }
 
 interface Request {
@@ -52,7 +58,10 @@ const UpdateUserService = async ({
     password: Yup.string()
   });
 
-  const { email, password, profile, name, queueIds = [], whatsappId, phone, address } = userData;
+  const {
+    email, password, profile, name, queueIds = [], whatsappId, phone, address,
+    addressStreet, addressNumber, addressComplement, addressCity, addressState, addressZipCode
+  } = userData;
 
   try {
     await schema.validate({ email, password, profile, name });
@@ -67,7 +76,13 @@ const UpdateUserService = async ({
     name,
     whatsappId: whatsappId || null,
     phone,
-    address
+    address,
+    addressStreet,
+    addressNumber,
+    addressComplement,
+    addressCity,
+    addressState,
+    addressZipCode
   });
 
   await user.$set("queues", queueIds);
@@ -83,6 +98,12 @@ const UpdateUserService = async ({
     profile: user.profile,
     phone: user.phone,
     address: user.address,
+    addressStreet: user.addressStreet,
+    addressNumber: user.addressNumber,
+    addressComplement: user.addressComplement,
+    addressCity: user.addressCity,
+    addressState: user.addressState,
+    addressZipCode: user.addressZipCode,
     companyId: user.companyId,
     company,
     queues: user.queues
