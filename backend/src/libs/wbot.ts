@@ -99,7 +99,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         wsocket = makeWASocket({
           logger: loggerBaileys,
           printQRInTerminal: false,
-          browser: Browsers.appropriate("Desktop"),
+          browser: ["ChatBot PortoPlan", "Chrome", "1.0.0"],
           auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, logger),
@@ -188,8 +188,16 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
             if (connection === "open") {
               retriesQrCodeMap.delete(id);
+
+              const connectedJid = String(wsocket.user?.id || "");
+              const connectedNumber = connectedJid
+                .split("@")[0]
+                .split(":")[0]
+                .replace(/\D/g, "");
+
               await whatsapp.update({
                 status: "CONNECTED",
+                number: connectedNumber || whatsapp.number || null,
                 qrcode: "",
                 retries: 0
               });
