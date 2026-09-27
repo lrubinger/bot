@@ -479,7 +479,7 @@ async function users(){
               <td>${esc(u.email||"")}</td>
               <td>${esc(u.super?"Superusuário":u.profile==="admin"?"Administrador":"Usuário")}</td>
               <td>
-                ${canManage && !u.super
+                ${canManage && String(u.id)!==String(state.user?.id)
                   ? `<button class="ghost temp-password-user" data-id="${u.id}">🔑 Senha temporária</button>`
                   : '<span class="muted">—</span>'}
               </td>
