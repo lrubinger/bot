@@ -21,6 +21,7 @@ interface UserData {
   addressCity?: string;
   addressState?: string;
   addressZipCode?: string;
+  active?: boolean;
 }
 
 interface Request {
@@ -60,7 +61,8 @@ const UpdateUserService = async ({
 
   const {
     email, password, profile, name, queueIds = [], whatsappId, phone, address,
-    addressStreet, addressNumber, addressComplement, addressCity, addressState, addressZipCode
+    addressStreet, addressNumber, addressComplement, addressCity, addressState, addressZipCode,
+    active
   } = userData;
 
   try {
@@ -82,7 +84,8 @@ const UpdateUserService = async ({
     addressComplement,
     addressCity,
     addressState,
-    addressZipCode
+    addressZipCode,
+    active
   });
 
   await user.$set("queues", queueIds);
@@ -104,6 +107,7 @@ const UpdateUserService = async ({
     addressCity: user.addressCity,
     addressState: user.addressState,
     addressZipCode: user.addressZipCode,
+    active: user.active,
     companyId: user.companyId,
     company,
     queues: user.queues
