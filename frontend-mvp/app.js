@@ -355,13 +355,26 @@ async function contacts(){
   const list=data.contacts||[];
 
   content(`
-    <div class="toolbar">
-      <button class="primary" id="importContactsBtn">Importar contatos</button>
+    <div class="toolbar contacts-toolbar-actions">
+      <button class="primary" id="newContactBtn" type="button">Novo Contato</button>
       <button class="ghost google-contacts-btn" id="importGoogleContactsBtn" type="button">
         <span class="google-g" aria-hidden="true">G</span>
         Importar do Google
       </button>
-      <button class="ghost" id="exportContactsBtn">Exportar contatos</button>
+      <button class="toolbar-icon-btn" id="importContactsBtn" type="button" title="Importar Contatos" aria-label="Importar Contatos">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3v12"/>
+          <path d="m7 10 5 5 5-5"/>
+          <path d="M5 20h14"/>
+        </svg>
+      </button>
+      <button class="toolbar-icon-btn" id="exportContactsBtn" type="button" title="Exportar Contatos" aria-label="Exportar Contatos">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 16V4"/>
+          <path d="m7 9 5-5 5 5"/>
+          <path d="M5 20h14"/>
+        </svg>
+      </button>
       <button class="ghost danger bulk-delete-contacts" id="deleteSelectedContactsBtn" type="button" disabled>
         Excluir selecionados
       </button>
@@ -556,6 +569,47 @@ async function contacts(){
       }
     };
   });
+
+  $("#newContactBtn").onclick=()=>{
+    modal(`
+      <h2>Novo Contato</h2>
+      <div class="settings-grid user-edit-grid">
+        <label class="full"><span>Nome</span><input id="newContactName" autocomplete="name" /></label>
+        <label><span>Empresa</span><input id="newContactCompany" autocomplete="organization" /></label>
+        <label><span>E-mail</span><input id="newContactEmail" type="email" autocomplete="email" /></label>
+        <label class="full"><span>Telefone</span><input id="newContactPhone" inputmode="tel" autocomplete="tel" placeholder="55 (00) 00000-0000" /></label>
+      </div>
+      <div class="settings-actions">
+        <button class="primary" id="saveNewContact" type="button">Cadastrar contato</button>
+        <span id="newContactStatus" class="small"></span>
+      </div>
+    `);
+
+    $("#newContactPhone")?.addEventListener("input",e=>{e.target.value=formatPhoneBR(e.target.value);});
+
+    $("#saveNewContact").onclick=async()=>{
+      const status=$("#newContactStatus");
+      const button=$("#saveNewContact");
+      status.textContent="Salvando...";
+      button.disabled=true;
+      try{
+        await api("/contacts/basic",{
+          method:"POST",
+          body:JSON.stringify({
+            name:$("#newContactName").value.trim(),
+            company:$("#newContactCompany").value.trim(),
+            email:$("#newContactEmail").value.trim(),
+            number:$("#newContactPhone").value.replace(/\D/g,"")
+          })
+        });
+        status.textContent="Contato cadastrado.";
+        setTimeout(()=>{closeModal();contacts();},500);
+      }catch(err){
+        status.textContent=err.message||"Não foi possível cadastrar o contato.";
+        button.disabled=false;
+      }
+    };
+  };
 
   $("#importContactsBtn").onclick=()=>$("#importContactsFile").click();
 
