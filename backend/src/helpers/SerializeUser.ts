@@ -13,6 +13,7 @@ interface SerializedUser {
   super: boolean;
   queues: Queue[];
   allTicket: string,
+  mustChangePassword: boolean,
 }
 
 export const SerializeUser = async (user: User): Promise<SerializedUser> => {
@@ -26,5 +27,6 @@ export const SerializeUser = async (user: User): Promise<SerializedUser> => {
     super: user.super,
     queues: user.queues,
 	allTicket: user.allTicket,
+    mustChangePassword: user.mustChangePassword,
   };
 };
