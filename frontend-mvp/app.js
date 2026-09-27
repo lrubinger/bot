@@ -975,67 +975,94 @@ function openForcedPasswordChange(){
   };
 }
 
-async function tickets(){
+let ticketsRefreshTimer=null;
+let ticketMessagesRefreshTimer=null;
+let activeTicketId=null;
+
+function ticketStatusLabel(status){
+  const value=String(status||"").toLowerCase();
+  if(value==="pending") return "Aguardando";
+  if(value==="open") return "Em atendimento";
+  if(value==="closed") return "Finalizado";
+  return status||"";
+}
+
+function scheduleTicketsRefresh(){
+  clearTimeout(ticketsRefreshTimer);
+  if(state.page!=="tickets") return;
+  ticketsRefreshTimer=setTimeout(()=>{ if(state.page==="tickets") tickets(true); },3000);
+}
+
+async function tickets(silent=false){
   setTitle("Atendimentos");
-  const data=await api('/tickets?pageNumber=1&status=open&showAll=true&queueIds=[]&tags=[]&users=[]');
-  const list=data.tickets||[];
+  clearTimeout(ticketsRefreshTimer);
+
+  const [pendingData,openData]=await Promise.all([
+    api('/tickets?pageNumber=1&status=pending&showAll=true&queueIds=[]&tags=[]&users=[]'),
+    api('/tickets?pageNumber=1&status=open&showAll=true&queueIds=[]&tags=[]&users=[]')
+  ]);
+  const merged=[...(pendingData?.tickets||[]),...(openData?.tickets||[])];
+  const byId=new Map();
+  merged.forEach(ticket=>byId.set(String(ticket.id),ticket));
+  const list=[...byId.values()].sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0));
 
   content(`
+    <div class="toolbar"><span class="small">Conversas recebidas pelo WhatsApp aparecem automaticamente nesta tela.</span></div>
     <div class="table-wrap">
       <table>
-        <thead>
-          <tr><th>Contato</th><th>Status</th><th>Última mensagem</th><th>Conversa</th></tr>
-        </thead>
+        <thead><tr><th>Contato</th><th>Status</th><th>Não lidas</th><th>Última mensagem</th><th>Conversa</th></tr></thead>
         <tbody>
-          ${list.map(t=>`
+          ${list.length?list.map(t=>`
             <tr class="clickable ticket-row" data-id="${t.id}">
               <td>${esc(t.contact?.name||t.contactId)}</td>
-              <td>${esc(t.status)}</td>
+              <td><span class="pill">${esc(ticketStatusLabel(t.status))}</span></td>
+              <td>${Number(t.unreadMessages||0)>0?`<span class="badge">${Number(t.unreadMessages||0)}</span>`:"—"}</td>
               <td>${esc(t.lastMessage||"")}</td>
-              <td>
-                <button class="contact-icon-btn ticket-chat-btn" data-id="${t.id}" title="Abrir conversa" aria-label="Abrir conversa">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.4 0-2.73-.34-3.9-.95L3 21l1.98-5.28A8.46 8.46 0 0 1 3.5 11.5 8.5 8.5 0 1 1 21 11.5Z"/>
-                  </svg>
-                </button>
-              </td>
-            </tr>`).join("")}
+              <td><button class="contact-icon-btn ticket-chat-btn" data-id="${t.id}" title="Abrir conversa" aria-label="Abrir conversa"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.4 0-2.73-.34-3.9-.95L3 21l1.98-5.28A8.46 8.46 0 0 1 3.5 11.5 8.5 8.5 0 1 1 21 11.5Z"/></svg></button></td>
+            </tr>`).join(""):'<tr><td colspan="5"><div class="empty-state">Nenhum atendimento aguardando ou em andamento.</div></td></tr>'}
         </tbody>
       </table>
-    </div>
-  `);
+    </div>`);
 
-  document.querySelectorAll(".ticket-row").forEach(r=>{
-    r.onclick=e=>{
-      if(e.target.closest(".ticket-chat-btn"))return;
-      openTicket(r.dataset.id);
-    };
-  });
-
-  document.querySelectorAll(".ticket-chat-btn").forEach(btn=>{
-    btn.onclick=e=>{
-      e.stopPropagation();
-      openTicket(btn.dataset.id);
-    };
-  });
+  document.querySelectorAll(".ticket-row").forEach(r=>{r.onclick=e=>{if(e.target.closest(".ticket-chat-btn"))return;openTicket(r.dataset.id);};});
+  document.querySelectorAll(".ticket-chat-btn").forEach(btn=>{btn.onclick=e=>{e.stopPropagation();openTicket(btn.dataset.id);};});
 
   const pendingTicketId=localStorage.getItem("pp_open_ticket");
-  if(pendingTicketId){
-    localStorage.removeItem("pp_open_ticket");
-    const match=list.find(t=>String(t.id)===String(pendingTicketId));
-    if(match){
-      setTimeout(()=>openTicket(pendingTicketId),80);
-    }else{
-      setTimeout(()=>openTicket(pendingTicketId),80);
-    }
-  }
+  if(pendingTicketId){localStorage.removeItem("pp_open_ticket");setTimeout(()=>openTicket(pendingTicketId),80);}
+  scheduleTicketsRefresh();
 }
+
+function renderTicketMessages(messages){
+  return (messages||[]).map(m=>`<div class="msg ${m.fromMe?"me":""}">${esc(m.body||"")}</div>`).join("");
+}
+
+async function refreshOpenTicket(id){
+  if(String(activeTicketId)!==String(id) || $("#modal").classList.contains("hidden")) return;
+  try{
+    const data=await api("/messages/"+id+"?pageNumber=1");
+    if(String(activeTicketId)!==String(id) || $("#modal").classList.contains("hidden")) return;
+    const box=$("#messages");
+    if(box){
+      const wasNearBottom=box.scrollHeight-box.scrollTop-box.clientHeight<120;
+      const html=renderTicketMessages(data.messages||[]);
+      if(box.innerHTML!==html){box.innerHTML=html;if(wasNearBottom)box.scrollTop=box.scrollHeight;}
+    }
+    const title=$("#ticketConversationTitle");
+    if(title)title.textContent=data.ticket?.contact?.name||"Atendimento";
+  }catch(_){}
+  clearTimeout(ticketMessagesRefreshTimer);
+  ticketMessagesRefreshTimer=setTimeout(()=>refreshOpenTicket(id),1500);
+}
+
 async function openTicket(id){
-  const data=await api("/messages/"+id+"?pageNumber=1"); const msgs=data.messages||[];
-  modal(`<h2>${esc(data.ticket?.contact?.name||"Atendimento")}</h2><div class="messages" id="messages">${msgs.map(m=>`<div class="msg ${m.fromMe?"me":""}">${esc(m.body||"")}</div>`).join("")}</div>
-  <div class="composer"><textarea id="msgBody" placeholder="Digite uma mensagem"></textarea><button class="primary" id="sendMsg">Enviar</button></div>`);
-  const box=$("#messages"); box.scrollTop=box.scrollHeight;
-  $("#sendMsg").onclick=async()=>{const body=$("#msgBody").value.trim();if(!body)return;await api("/messages/"+id,{method:"POST",body:JSON.stringify({body})});$("#msgBody").value="";setTimeout(()=>openTicket(id),700)};
+  activeTicketId=String(id);
+  clearTimeout(ticketMessagesRefreshTimer);
+  const data=await api("/messages/"+id+"?pageNumber=1");
+  const msgs=data.messages||[];
+  modal(`<h2 id="ticketConversationTitle">${esc(data.ticket?.contact?.name||"Atendimento")}</h2><div class="small">As novas mensagens recebidas pelo WhatsApp são atualizadas automaticamente.</div><div class="messages" id="messages">${renderTicketMessages(msgs)}</div><div class="composer"><textarea id="msgBody" placeholder="Digite uma mensagem"></textarea><button class="primary" id="sendMsg">Enviar</button></div>`);
+  const box=$("#messages");if(box)box.scrollTop=box.scrollHeight;
+  $("#sendMsg").onclick=async()=>{const body=$("#msgBody").value.trim();if(!body)return;const button=$("#sendMsg");button.disabled=true;try{await api("/messages/"+id,{method:"POST",body:JSON.stringify({body})});$("#msgBody").value="";setTimeout(()=>refreshOpenTicket(id),250);}finally{button.disabled=false;}};
+  ticketMessagesRefreshTimer=setTimeout(()=>refreshOpenTicket(id),1200);
 }
 async function kanban(){
   setTitle("Kanban");
