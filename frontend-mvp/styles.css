@@ -1078,3 +1078,54 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
 .forced-password-change{
   max-width:610px;
 }
+
+
+/* Contact action icons */
+.contact-icon-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.contact-icon-btn{
+  width:38px;
+  height:38px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border:0;
+  border-radius:10px;
+  background:transparent;
+  color:#20242f;
+  cursor:pointer;
+  padding:0;
+}
+.contact-icon-btn:hover{
+  background:#f1f3f8;
+}
+.contact-icon-btn:disabled{
+  opacity:.55;
+  cursor:wait;
+}
+.contact-icon-btn svg{
+  width:20px;
+  height:20px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.9;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.contact-icon-btn.danger{
+  background:#fff2f2;
+  color:#e12929;
+}
+.contact-icon-btn.danger:hover{
+  background:#ffe7e7;
+}
+.ticket-chat-btn{
+  background:#fff;
+  border:1px solid #dde2ec;
+}
+.ticket-chat-btn:hover{
+  background:#f6f7fb;
+}
