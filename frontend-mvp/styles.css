@@ -1566,3 +1566,84 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
   .tickets-page .wa-inbox{grid-template-columns:var(--conversation-width,300px) minmax(0,1fr) 260px}
   .tickets-page .wa-inbox.details-collapsed{grid-template-columns:var(--conversation-width,300px) minmax(0,1fr) 48px}
 }
+
+
+/* Conversation unread and archive controls */
+.wa-conversations-panel{
+  min-height:0;
+}
+.wa-conversations-list{
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  scrollbar-gutter:stable;
+  overscroll-behavior:contain;
+}
+.wa-conversation{
+  position:relative;
+}
+.wa-conversation-meta{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  flex:0 0 auto;
+}
+.wa-conversation-menu-btn{
+  width:26px;
+  height:24px;
+  border:0;
+  background:transparent;
+  color:#6d748a;
+  border-radius:7px;
+  cursor:pointer;
+  font-size:17px;
+  line-height:1;
+  padding:0 0 7px;
+  display:grid;
+  place-items:center;
+}
+.wa-conversation-menu-btn:hover{
+  background:#e4e8f2;
+  color:var(--navy);
+}
+.wa-conversation-menu{
+  position:absolute;
+  top:34px;
+  right:9px;
+  z-index:20;
+  min-width:158px;
+  padding:5px;
+  background:#fff;
+  border:1px solid #dfe4ee;
+  border-radius:10px;
+  box-shadow:0 12px 28px rgba(24,31,72,.16);
+}
+.wa-conversation-menu button{
+  display:block;
+  width:100%;
+  border:0;
+  background:transparent;
+  color:#20274c;
+  text-align:left;
+  padding:8px 10px;
+  border-radius:7px;
+  cursor:pointer;
+  font-size:12px;
+}
+.wa-conversation-menu button:hover{
+  background:#f0f3f8;
+}
+.wa-unread-badge{
+  min-width:21px !important;
+  height:21px !important;
+  padding:0 6px !important;
+  border-radius:999px !important;
+  background:#22c55e !important;
+  color:#fff !important;
+  font-size:10px !important;
+  font-weight:800 !important;
+  line-height:21px !important;
+  text-align:center;
+  flex:0 0 auto;
+  box-shadow:0 0 0 2px #fff;
+}
