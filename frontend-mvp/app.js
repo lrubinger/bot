@@ -1047,11 +1047,16 @@ function renderTicketList(list){
 }
 
 async function fetchTicketList(){
-  const [pendingData,openData]=await Promise.all([
+  const [pendingData,openData,closedData]=await Promise.all([
     api('/tickets?pageNumber=1&status=pending&showAll=true&queueIds=[]&tags=[]&users=[]'),
-    api('/tickets?pageNumber=1&status=open&showAll=true&queueIds=[]&tags=[]&users=[]')
+    api('/tickets?pageNumber=1&status=open&showAll=true&queueIds=[]&tags=[]&users=[]'),
+    api('/tickets?pageNumber=1&status=closed&showAll=true&queueIds=[]&tags=[]&users=[]')
   ]);
-  const merged=[...(pendingData?.tickets||[]),...(openData?.tickets||[])];
+  const merged=[
+    ...(pendingData?.tickets||[]),
+    ...(openData?.tickets||[]),
+    ...(closedData?.tickets||[])
+  ];
   const byId=new Map();
   merged.forEach(ticket=>byId.set(String(ticket.id),ticket));
   return [...byId.values()].sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0));
@@ -1110,6 +1115,7 @@ async function tickets(){
             <option value="all">Todas</option>
             <option value="pending">Aguardando</option>
             <option value="open">Em atendimento</option>
+            <option value="closed">Finalizadas</option>
           </select>
           <div class="wa-search-wrap">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
