@@ -326,6 +326,86 @@ export const update = async (
   return res.status(200).json(responseUser);
 };
 
+
+export const setTemporaryPassword = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const requester = await (await import("../models/User")).default.findByPk(+req.user.id);
+  const target = await (await import("../models/User")).default.findByPk(+req.params.userId);
+
+  if (!requester || !target) {
+    throw new AppError("ERR_NO_USER_FOUND", 404);
+  }
+
+  const sameCompany = requester.companyId === target.companyId;
+  const allowed = requester.super === true ||
+    (requester.profile === "admin" && sameCompany && !target.super);
+
+  if (!allowed) {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+
+  const password = String(req.body?.password || "");
+  const confirmation = String(req.body?.confirmation || "");
+
+  if (password.length < 8) {
+    throw new AppError("A senha temporária deve ter no mínimo 8 caracteres.", 400);
+  }
+
+  if (password !== confirmation) {
+    throw new AppError("As senhas temporárias não conferem.", 400);
+  }
+
+  await target.update({
+    password,
+    mustChangePassword: true,
+    tokenVersion: (target.tokenVersion || 0) + 1
+  });
+
+  return res.status(200).json({
+    message: "Senha temporária definida.",
+    mustChangePassword: true
+  });
+};
+
+export const changeTemporaryPassword = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const user = await (await import("../models/User")).default.findByPk(+req.user.id);
+
+  if (!user) {
+    throw new AppError("ERR_NO_USER_FOUND", 404);
+  }
+
+  if (!user.mustChangePassword) {
+    throw new AppError("A troca obrigatória de senha não está pendente.", 400);
+  }
+
+  const password = String(req.body?.password || "");
+  const confirmation = String(req.body?.confirmation || "");
+
+  if (password.length < 8) {
+    throw new AppError("A nova senha deve ter no mínimo 8 caracteres.", 400);
+  }
+
+  if (password !== confirmation) {
+    throw new AppError("As senhas não conferem.", 400);
+  }
+
+  await user.update({
+    password,
+    mustChangePassword: false,
+    tokenVersion: (user.tokenVersion || 0) + 1
+  });
+
+  return res.status(200).json({
+    message: "Senha atualizada com sucesso.",
+    mustChangePassword: false
+  });
+};
+
 export const remove = async (
   req: Request,
   res: Response
