@@ -1036,21 +1036,36 @@ function renderTicketList(list){
   return (list||[]).length ? list.map(t=>{
     const contact=t.contact||{};
     const unread=Number(t.unreadMessages||0);
-    return `<button class="wa-conversation ${String(activeTicketId)===String(t.id)?"active":""}" data-ticket-id="${t.id}">
+    const archived=t.archived===true;
+    return `<div class="wa-conversation ${String(activeTicketId)===String(t.id)?"active":""}" data-ticket-id="${t.id}" role="button" tabindex="0">
       <span class="wa-avatar">${contact.profilePicUrl?`<img src="${esc(contact.profilePicUrl)}" alt="" />`:esc(ticketInitials(contact.name||contact.number))}</span>
       <span class="wa-conversation-main">
-        <span class="wa-conversation-top"><b>${esc(contact.name||formatPhoneBR(contact.number||"")||"Contato")}</b><small>${ticketTime(t.updatedAt||t.createdAt)}</small></span>
-        <span class="wa-conversation-bottom"><span>${esc(t.lastMessage||ticketStatusLabel(t.status)||"")}</span>${unread?`<strong>${unread}</strong>`:""}</span>
+        <span class="wa-conversation-top">
+          <b>${esc(contact.name||formatPhoneBR(contact.number||"")||"Contato")}</b>
+          <span class="wa-conversation-meta">
+            <small>${ticketTime(t.updatedAt||t.createdAt)}</small>
+            <button class="wa-conversation-menu-btn" data-ticket-menu="${t.id}" type="button" aria-label="Opções da conversa">...</button>
+          </span>
+        </span>
+        <span class="wa-conversation-bottom">
+          <span>${esc(t.lastMessage||ticketStatusLabel(t.status)||"")}</span>
+          ${unread?`<strong class="wa-unread-badge">${unread}</strong>`:""}
+        </span>
       </span>
-    </button>`;
-  }).join("") : '<div class="wa-empty-list">Nenhuma conversa aguardando ou em atendimento.</div>';
+      <div class="wa-conversation-menu hidden" data-ticket-menu-popover="${t.id}">
+        <button type="button" data-ticket-action="unread" data-id="${t.id}">Marcar como não lido</button>
+        <button type="button" data-ticket-action="${archived?"unarchive":"archive"}" data-id="${t.id}">${archived?"Desarquivar":"Arquivar"}</button>
+      </div>
+    </div>`;
+  }).join("") : '<div class="wa-empty-list">Nenhuma conversa encontrada.</div>';
 }
 
-async function fetchTicketList(){
+async function fetchTicketList(includeArchived=false){
+  const archived=includeArchived?"true":"false";
   const [pendingData,openData,closedData]=await Promise.all([
-    api('/tickets?pageNumber=1&status=pending&showAll=true&queueIds=[]&tags=[]&users=[]'),
-    api('/tickets?pageNumber=1&status=open&showAll=true&queueIds=[]&tags=[]&users=[]'),
-    api('/tickets?pageNumber=1&status=closed&showAll=true&queueIds=[]&tags=[]&users=[]')
+    api(`/tickets?pageNumber=1&status=pending&showAll=true&queueIds=[]&tags=[]&users=[]&archived=${archived}`),
+    api(`/tickets?pageNumber=1&status=open&showAll=true&queueIds=[]&tags=[]&users=[]&archived=${archived}`),
+    api(`/tickets?pageNumber=1&status=closed&showAll=true&queueIds=[]&tags=[]&users=[]&archived=${archived}`)
   ]);
   const merged=[
     ...(pendingData?.tickets||[]),
@@ -1062,34 +1077,68 @@ async function fetchTicketList(){
   return [...byId.values()].sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0));
 }
 
-function bindTicketList(){
-  document.querySelectorAll("[data-ticket-id]").forEach(btn=>{
-    btn.onclick=()=>openTicket(btn.dataset.ticketId);
-  });
+function closeTicketMenus(){
+  document.querySelectorAll(".wa-conversation-menu").forEach(menu=>menu.classList.add("hidden"));
 }
 
-function filterTicketList(){
-  const query=String($("#ticketSearch")?.value||"").trim().toLowerCase();
-  const status=$("#ticketStatusFilter")?.value||"all";
-  const filtered=ticketsCache.filter(t=>{
-    const name=String(t.contact?.name||"").toLowerCase();
-    const number=String(t.contact?.number||"").toLowerCase();
-    const last=String(t.lastMessage||"").toLowerCase();
-    const matchesText=!query || name.includes(query) || number.includes(query) || last.includes(query);
-    const matchesStatus=status==="all" || String(t.status||"")===status;
-    return matchesText && matchesStatus;
+function bindTicketList(){
+  document.querySelectorAll(".wa-conversation[data-ticket-id]").forEach(row=>{
+    row.onclick=e=>{
+      if(e.target.closest(".wa-conversation-menu-btn") || e.target.closest(".wa-conversation-menu"))return;
+      openTicket(row.dataset.ticketId);
+    };
+    row.onkeydown=e=>{
+      if((e.key==="Enter"||e.key===" ") && !e.target.closest(".wa-conversation-menu-btn")){
+        e.preventDefault();
+        openTicket(row.dataset.ticketId);
+      }
+    };
   });
-  const listEl=$("#ticketConversationList");
-  if(listEl){
-    listEl.innerHTML=renderTicketList(filtered);
-    bindTicketList();
-  }
+
+  document.querySelectorAll("[data-ticket-menu]").forEach(btn=>{
+    btn.onclick=e=>{
+      e.stopPropagation();
+      const id=btn.dataset.ticketMenu;
+      const menu=document.querySelector(`[data-ticket-menu-popover="${id}"]`);
+      const wasHidden=menu?.classList.contains("hidden");
+      closeTicketMenus();
+      if(menu && wasHidden)menu.classList.remove("hidden");
+    };
+  });
+
+  document.querySelectorAll("[data-ticket-action]").forEach(btn=>{
+    btn.onclick=async e=>{
+      e.stopPropagation();
+      const id=btn.dataset.id;
+      const action=btn.dataset.ticketAction;
+      try{
+        if(action==="unread"){
+          await api("/tickets/"+id+"/mark-unread",{method:"POST",body:"{}"});
+        }else if(action==="archive"){
+          await api("/tickets/"+id+"/archive",{method:"POST",body:"{}"});
+          if(String(activeTicketId)===String(id)){
+            activeTicketId=null;
+            const chat=$("#ticketChatPanel");
+            if(chat)chat.innerHTML='<div class="wa-chat-empty"><div class="wa-chat-empty-icon">💬</div><b>Atendimentos</b><span>Selecione uma conversa para visualizar as mensagens.</span></div>';
+            const details=$("#ticketContactContent");
+            if(details)details.innerHTML='<div class="wa-contact-empty">As informações do contato aparecerão aqui.</div>';
+          }
+        }else if(action==="unarchive"){
+          await api("/tickets/"+id+"/unarchive",{method:"POST",body:"{}"});
+        }
+        ticketsCache=await fetchTicketList($("#ticketStatusFilter")?.value==="archived");
+        filterTicketList();
+      }catch(err){
+        alert(err.message||"Não foi possível atualizar a conversa.");
+      }
+    };
+  });
 }
 
 async function refreshTicketsList(){
   if(state.page!=="tickets")return;
   try{
-    ticketsCache=await fetchTicketList();
+    ticketsCache=await fetchTicketList($("#ticketStatusFilter")?.value==="archived");
     filterTicketList();
   }catch(_){}
   clearTimeout(ticketsRefreshTimer);
@@ -1101,7 +1150,7 @@ async function tickets(){
   clearTimeout(ticketsRefreshTimer);
   clearTimeout(ticketMessagesRefreshTimer);
   activeTicketId=null;
-  ticketsCache=await fetchTicketList();
+  ticketsCache=await fetchTicketList(false);
 
   content(`
     <div class="wa-inbox ${ticketDetailsCollapsed?"details-collapsed":""}" id="waInbox" style="--conversation-width:${localStorage.getItem("pp_ticket_list_width")||"330"}px">
@@ -1116,6 +1165,7 @@ async function tickets(){
             <option value="pending">Aguardando</option>
             <option value="open">Em atendimento</option>
             <option value="closed">Finalizadas</option>
+            <option value="archived">Arquivadas</option>
           </select>
           <div class="wa-search-wrap">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
@@ -1147,7 +1197,10 @@ async function tickets(){
 
   bindTicketList();
   $("#ticketSearch").oninput=filterTicketList;
-  $("#ticketStatusFilter").onchange=filterTicketList;
+  $("#ticketStatusFilter").onchange=async()=>{
+    ticketsCache=await fetchTicketList($("#ticketStatusFilter").value==="archived");
+    filterTicketList();
+  };
 
   const resizer=$("#ticketListResizer");
   if(resizer){
@@ -1225,7 +1278,7 @@ function renderTicketContactInfo(ticket){
 async function refreshOpenTicket(id){
   if(String(activeTicketId)!==String(id) || state.page!=="tickets") return;
   try{
-    const data=await api("/messages/"+id+"?pageNumber=1");
+    const data=await api("/messages/"+id+"?pageNumber=1&markRead=false");
     if(String(activeTicketId)!==String(id) || state.page!=="tickets") return;
 
     const box=$("#ticketMessages");
