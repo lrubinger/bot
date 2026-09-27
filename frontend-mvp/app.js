@@ -445,9 +445,148 @@ async function queues(){
   content(`<div class="table-wrap"><table><thead><tr><th>ID</th><th>Nome</th><th>Saudação</th></tr></thead><tbody>${(list||[]).map(q=>`<tr><td>${q.id}</td><td>${esc(q.name)}</td><td>${esc(q.greetingMessage||"")}</td></tr>`).join("")}</tbody></table></div>`);
 }
 async function users(){
-  setTitle("Usuários"); const data=await api("/users?pageNumber=1&searchParam=");
+  setTitle("Usuários");
+  const data=await api("/users?pageNumber=1&searchParam=");
   const list=data.users||data||[];
-  content(`<div class="table-wrap"><table><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th></tr></thead><tbody>${list.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(u.profile)}</td></tr>`).join("")}</tbody></table></div>`);
+  const canManage=Boolean(state.user?.super) || String(state.user?.profile||"").toLowerCase()==="admin";
+
+  content(`
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Telefone</th>
+            <th>Acesso</th>
+            <th>E-mail</th>
+            <th>Perfil</th>
+            <th>Senha temporária</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${list.map(u=>`
+            <tr>
+              <td>${esc(u.name||"")}</td>
+              <td>${esc(formatPhoneBR(u.phone||""))}</td>
+              <td><span class="access-pill ${u.active===false?"blocked":"allowed"}">${u.active===false?"Não liberado":"Liberado"}</span></td>
+              <td>${esc(u.email||"")}</td>
+              <td>${esc(u.super?"Superusuário":u.profile==="admin"?"Administrador":"Usuário")}</td>
+              <td>
+                ${canManage && !u.super
+                  ? `<button class="ghost temp-password-user" data-id="${u.id}">Criar/alterar</button>`
+                  : '<span class="muted">—</span>'}
+              </td>
+              <td>
+                <div class="user-actions">
+                  ${canManage || String(u.id)===String(state.user?.id)
+                    ? `<button class="ghost edit-user-row" data-id="${u.id}">Editar</button>`
+                    : ""}
+                  ${canManage && String(u.id)!==String(state.user?.id) && !u.super
+                    ? `<button class="ghost danger delete-user-row" data-id="${u.id}" data-name="${esc(u.name||"usuário")}">Excluir</button>`
+                    : ""}
+                </div>
+              </td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+  `);
+
+  const findUser=id=>list.find(u=>String(u.id)===String(id));
+
+  const openEditUser=(id,focusPassword=false)=>{
+    const u=findUser(id);
+    if(!u)return;
+    const editingSelf=String(u.id)===String(state.user?.id);
+    const canEditAccess=canManage && !u.super;
+
+    modal(`
+      <h2>Editar usuário</h2>
+      <div class="settings-grid user-edit-grid">
+        <label class="full"><span>Nome</span><input id="editUserName" value="${esc(u.name||"")}" /></label>
+        <label><span>Telefone</span><input id="editUserPhone" inputmode="tel" value="${esc(formatPhoneBR(u.phone||""))}" /></label>
+        <label><span>E-mail</span><input id="editUserEmail" type="email" value="${esc(u.email||"")}" /></label>
+        <label><span>Acesso</span>
+          <select id="editUserActive" class="settings-select" ${canEditAccess?"":"disabled"}>
+            <option value="true" ${u.active===false?"":"selected"}>Liberado</option>
+            <option value="false" ${u.active===false?"selected":""}>Não liberado</option>
+          </select>
+        </label>
+        <label><span>Perfil</span>
+          <select id="editUserProfile" class="settings-select" ${canEditAccess?"":"disabled"}>
+            <option value="user" ${u.profile==="user"?"selected":""}>Usuário</option>
+            <option value="admin" ${u.profile==="admin"?"selected":""}>Administrador</option>
+          </select>
+        </label>
+        <label class="full"><span>Senha temporária</span><input id="editUserPassword" type="text" minlength="8" placeholder="Preencha para criar ou alterar" /></label>
+        ${editingSelf?'<label class="full"><span>Senha atual</span><input id="editUserCurrentPassword" type="password" placeholder="Obrigatória para alterar seu e-mail ou senha" /></label>':""}
+      </div>
+      <p class="settings-help">A senha temporária não é exibida depois de salva. Informe uma nova senha somente quando precisar redefinir o acesso do usuário.</p>
+      <div class="settings-actions">
+        <button class="primary" id="saveUserEdit" type="button">Salvar usuário</button>
+        <span id="editUserStatus" class="small"></span>
+      </div>
+    `);
+
+    const phone=$("#editUserPhone");
+    if(phone) phone.addEventListener("input",e=>{e.target.value=formatPhoneBR(e.target.value);});
+    if(focusPassword) setTimeout(()=>$("#editUserPassword")?.focus(),50);
+
+    $("#saveUserEdit").onclick=async()=>{
+      const status=$("#editUserStatus");
+      const password=$("#editUserPassword").value.trim();
+      if(password && password.length<8){
+        status.textContent="A senha temporária deve ter no mínimo 8 caracteres.";
+        return;
+      }
+
+      const payload={
+        name:$("#editUserName").value.trim(),
+        phone:$("#editUserPhone").value.replace(/\D/g,""),
+        email:$("#editUserEmail").value.trim()
+      };
+
+      if(canEditAccess){
+        payload.active=$("#editUserActive").value==="true";
+        payload.profile=$("#editUserProfile").value;
+      }
+
+      if(password) payload.password=password;
+      if(editingSelf && $("#editUserCurrentPassword")){
+        payload.currentPassword=$("#editUserCurrentPassword").value;
+      }
+
+      status.textContent="Salvando...";
+      try{
+        await api("/users/"+u.id,{method:"PUT",body:JSON.stringify(payload)});
+        status.textContent="Usuário salvo.";
+        if(editingSelf){
+          state.user={...state.user,name:payload.name,email:payload.email,phone:payload.phone};
+          localStorage.setItem("pp_user",JSON.stringify(state.user));
+          $("#userLine").textContent=`${state.user.name||""} · ${state.user.email||""}`;
+        }
+        setTimeout(()=>{closeModal();users();},500);
+      }catch(err){
+        status.textContent=err.message||"Não foi possível salvar o usuário.";
+      }
+    };
+  };
+
+  document.querySelectorAll(".edit-user-row").forEach(btn=>btn.onclick=()=>openEditUser(btn.dataset.id,false));
+  document.querySelectorAll(".temp-password-user").forEach(btn=>btn.onclick=()=>openEditUser(btn.dataset.id,true));
+  document.querySelectorAll(".delete-user-row").forEach(btn=>{
+    btn.onclick=async()=>{
+      const name=btn.dataset.name||"este usuário";
+      if(!confirm(`Excluir ${name}? Esta ação não pode ser desfeita.`))return;
+      try{
+        await api("/users/"+btn.dataset.id,{method:"DELETE"});
+        await users();
+      }catch(err){
+        alert(err.message||"Não foi possível excluir o usuário.");
+      }
+    };
+  });
 }
 async function tickets(){
   setTitle("Atendimentos");
