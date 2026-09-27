@@ -120,8 +120,55 @@ export const update = async (
   }
 
   const userData = { ...req.body };
+  const emailChanged =
+    userData.email !== undefined &&
+    String(userData.email).trim().toLowerCase() !== String(target.email || "").trim().toLowerCase();
+  const passwordChanged = Boolean(userData.password);
 
-  // Only PortoPlan master may change access level.
+  if (passwordChanged && String(userData.password).length < 8) {
+    throw new AppError("A nova senha deve ter no mínimo 8 caracteres.", 400);
+  }
+
+  if (emailChanged || passwordChanged) {
+    const currentPassword = String(userData.currentPassword || "");
+    if (!currentPassword || !(await requester.checkPassword(currentPassword))) {
+      throw new AppError("Senha atual inválida.", 403);
+    }
+  }
+
+  delete userData.currentPassword;
+
+  if (userData.phone !== undefined) {
+    userData.phone = String(userData.phone).replace(/\D/g, "");
+  }
+  if (userData.addressZipCode !== undefined) {
+    userData.addressZipCode = String(userData.addressZipCode).replace(/\D/g, "");
+  }
+  if (userData.addressState !== undefined) {
+    userData.addressState = String(userData.addressState).toUpperCase().slice(0, 2);
+  }
+
+  if (
+    userData.addressStreet !== undefined ||
+    userData.addressNumber !== undefined ||
+    userData.addressComplement !== undefined ||
+    userData.addressCity !== undefined ||
+    userData.addressState !== undefined ||
+    userData.addressZipCode !== undefined
+  ) {
+    userData.address = [
+      userData.addressStreet,
+      userData.addressNumber,
+      userData.addressComplement,
+      userData.addressCity,
+      userData.addressState,
+      userData.addressZipCode
+    ]
+      .filter(value => value !== undefined && String(value).trim() !== "")
+      .join(", ");
+  }
+
+  // Only PortoPlan master may change access level/company.
   if (!isMaster) {
     delete userData.profile;
     delete userData.companyId;
