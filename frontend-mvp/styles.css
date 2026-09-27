@@ -976,3 +976,32 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
 @media(max-width:700px){
   .person-main{flex-direction:column}
 }
+
+
+/* Users management table */
+.user-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.access-pill{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:88px;
+  padding:5px 9px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:800;
+}
+.access-pill.allowed{
+  background:#e5f6ee;
+  color:#21845d;
+}
+.access-pill.blocked{
+  background:#f8e8e8;
+  color:#b84949;
+}
+.user-edit-grid{
+  margin-top:16px;
+}
