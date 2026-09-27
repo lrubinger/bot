@@ -250,7 +250,9 @@ export const callback = async (
   req: Request,
   res: Response
 ): Promise<void> => {
-  const frontendUrl = clean(process.env.FRONTEND_URL || "https://bot.portoplan.com.br").replace(/\/$/, "");
+  const frontendUrl = clean(
+    process.env.GOOGLE_CONTACTS_FRONTEND_URL || "https://bot.portoplan.com.br"
+  ).replace(/\/$/, "");
   const { clientId, clientSecret, redirectUri } = requiredGoogleConfig();
 
   const error = clean(req.query.error);
