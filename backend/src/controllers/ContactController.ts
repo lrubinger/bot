@@ -17,6 +17,9 @@ import SimpleListService, {
   SearchContactParams
 } from "../services/ContactServices/SimpleListService";
 import ContactCustomField from "../models/ContactCustomField";
+import Ticket from "../models/Ticket";
+import { Op } from "sequelize";
+import CreateTicketService from "../services/TicketServices/CreateTicketService";
 
 type IndexQuery = {
   searchParam: string;
@@ -174,6 +177,44 @@ export const update = async (
   });
 
   return res.status(200).json(contact);
+};
+
+export const startConversation = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { contactId } = req.params;
+  const { companyId, id: userId } = req.user;
+
+  await ShowContactService(contactId, companyId);
+
+  let ticket = await Ticket.findOne({
+    where: {
+      contactId: +contactId,
+      companyId,
+      status: { [Op.in]: ["open", "pending"] }
+    },
+    order: [["updatedAt", "DESC"]]
+  });
+
+  if (!ticket) {
+    ticket = await CreateTicketService({
+      contactId: +contactId,
+      status: "open",
+      userId: +userId,
+      companyId
+    });
+  } else if (ticket.status !== "open" || ticket.userId !== +userId) {
+    await ticket.update({
+      status: "open",
+      userId: +userId
+    });
+  }
+
+  return res.status(200).json({
+    ticketId: ticket.id,
+    contactId: +contactId
+  });
 };
 
 export const remove = async (
