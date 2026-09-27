@@ -148,7 +148,7 @@ export const update = async (
     throw new AppError("A nova senha deve ter no mínimo 8 caracteres.", 400);
   }
 
-  if (emailChanged || passwordChanged) {
+  if (isSelf && (emailChanged || passwordChanged)) {
     const currentPassword = String(userData.currentPassword || "");
     if (!currentPassword || !(await requester.checkPassword(currentPassword))) {
       throw new AppError("Senha atual inválida.", 403);
