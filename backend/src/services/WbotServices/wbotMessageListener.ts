@@ -1768,7 +1768,9 @@ const handleMessage = async (
 
     const ticket = await FindOrCreateTicketService(contact, wbot.id!, unreadMessages, companyId, groupContact);
 
-
+    if (!msg.key.fromMe && ticket.archived) {
+      await ticket.update({ archived: false });
+    }
 
     await provider(ticket, msg, companyId, contact, wbot as WASocket);
 
