@@ -68,6 +68,13 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   const ticket = await ShowTicketService(ticketId, companyId);
 
+  if (ticket.status === "pending") {
+    await ticket.update({
+      status: "open",
+      userId: +req.user.id
+    });
+  }
+
   SetTicketMessagesAsRead(ticket);
 
   if (medias) {
