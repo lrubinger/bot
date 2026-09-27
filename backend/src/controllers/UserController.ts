@@ -396,8 +396,7 @@ export const changeTemporaryPassword = async (
 
   await user.update({
     password,
-    mustChangePassword: false,
-    tokenVersion: (user.tokenVersion || 0) + 1
+    mustChangePassword: false
   });
 
   return res.status(200).json({
