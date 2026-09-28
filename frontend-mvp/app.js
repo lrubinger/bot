@@ -1269,8 +1269,9 @@ function renderTicketMessages(messages){
     const pending=m.pending===true;
     const reaction=String(m.reaction||"");
     const quick=["👍","❤️","😂","😮","😢","🙏"];
+    const compactMessage=!media && body.trim().length>0 && body.trim().length<=28;
     return `<div class="wa-message-row ${m.fromMe?"me":""}" data-message-row="${esc(m.id)}">
-      <div class="wa-message-wrap">
+      <div class="wa-message-wrap ${compactMessage?"compact":"wide"}">
         <button type="button" class="wa-message-menu-trigger" data-message-menu-trigger="${esc(m.id)}" aria-label="Opções da mensagem">${messageMenuChevron()}</button>
         <div class="wa-message ${m.fromMe?"me":""}">
           ${media}
@@ -1353,8 +1354,8 @@ function closeTicketMenus(){
   document.querySelectorAll(".wa-conversation-menu").forEach(menu=>menu.classList.add("hidden"));
 }
 
-async function openTicketContactModal(ticketId){
-  const ticket=ticketsCache.find(t=>String(t.id)===String(ticketId));
+async function openTicketContactModal(ticketId,currentTicket=null,editMode=false){
+  const ticket=currentTicket || ticketsCache.find(t=>String(t.id)===String(ticketId));
   if(!ticket?.contact)return;
 
   const contact=ticket.contact;
@@ -1364,8 +1365,8 @@ async function openTicketContactModal(ticketId){
   modal(`
     <div class="ticket-contact-modal">
       <div class="eyebrow">CONTATO</div>
-      <h2>Cadastrar contato</h2>
-      <p class="muted">Os dados salvos serão exibidos nas conversas deste cliente.</p>
+      <h2>${editMode?"Editar contato":"Cadastrar contato"}</h2>
+      <p class="muted">${editMode?"Atualize os dados deste contato.":"Os dados salvos serão exibidos nas conversas deste cliente."}</p>
       <form id="ticketContactForm" class="ticket-contact-form">
         <label>Nome
           <input id="ticketContactNameInput" value="${esc((/^\d+$/.test(String(contact.name||""))||String(contact.name||"").includes("@"))?"":contact.name||"")}" required />
@@ -1381,7 +1382,7 @@ async function openTicketContactModal(ticketId){
         </label>
         <div class="ticket-contact-modal-actions">
           <button type="button" class="ghost" id="ticketContactCancel">Cancelar</button>
-          <button type="submit" class="primary" id="ticketContactSave">Salvar contato</button>
+          <button type="submit" class="primary" id="ticketContactSave">${editMode?"Salvar alterações":"Salvar contato"}</button>
         </div>
         <div id="ticketContactStatus" class="small"></div>
       </form>
@@ -1825,6 +1826,9 @@ function renderTicketContactInfo(ticket){
   const resolvedNumber=ticketResolvedNumber(ticket);
   return `
     <div class="wa-profile-head">
+      ${!c.isGroup?`<button type="button" class="wa-profile-edit" id="ticketContactEditBtn" title="Editar contato" aria-label="Editar contato">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l11-11-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>
+      </button>`:""}
       <span class="wa-profile-avatar">${c.profilePicUrl?`<img src="${esc(c.profilePicUrl)}" alt="" />`:esc(ticketInitials(ticketContactName(ticket)))}</span>
       <h3>${esc(ticketContactName(ticket))}</h3>
       <span>${esc(formatPhoneBR(resolvedNumber))}</span>
@@ -1848,6 +1852,12 @@ function renderTicketContactInfo(ticket){
     </div>
     ${Array.isArray(ticket?.tags)&&ticket.tags.length?`<div class="wa-profile-section"><h4>Etiquetas</h4><div class="wa-tags">${ticket.tags.map(tag=>`<span>${esc(tag.name)}</span>`).join("")}</div></div>`:""}
   `;
+}
+
+function bindTicketContactEdit(ticket){
+  const btn=$("#ticketContactEditBtn");
+  if(!btn || !ticket?.contact)return;
+  btn.onclick=()=>openTicketContactModal(ticket.id,ticket,true);
 }
 
 async function refreshOpenTicket(id){
@@ -1875,7 +1885,10 @@ async function refreshOpenTicket(id){
     const title=$("#ticketConversationTitle");
     if(title)title.textContent=ticketContactName(data.ticket)||"Atendimento";
     const details=$("#ticketContactContent");
-    if(details)details.innerHTML=renderTicketContactInfo(data.ticket);
+    if(details){
+      details.innerHTML=renderTicketContactInfo(data.ticket);
+      bindTicketContactEdit(data.ticket);
+    }
     loadTicketPending(id);
   }catch(_){}
 
@@ -1949,7 +1962,10 @@ async function openTicket(id){
     </form>
   `;
 
-  if(details)details.innerHTML=renderTicketContactInfo(ticket);
+  if(details){
+    details.innerHTML=renderTicketContactInfo(ticket);
+    bindTicketContactEdit(ticket);
+  }
   loadTicketPending(id);
 
   const box=$("#ticketMessages");
