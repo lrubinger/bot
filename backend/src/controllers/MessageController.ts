@@ -1,4 +1,7 @@
 import { Request, Response } from "express";
+import fs from "fs";
+import path from "path";
+import { downloadMediaMessage } from "@whiskeysockets/baileys";
 import AppError from "../errors/AppError";
 
 import SetTicketMessagesAsRead from "../helpers/SetTicketMessagesAsRead";
@@ -95,6 +98,70 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   }
 
   return res.send();
+};
+
+export const media = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const { messageId } = req.params;
+  const { companyId } = req.user;
+
+  const message = await Message.findOne({
+    where: { id: messageId, companyId }
+  });
+
+  if (!message) {
+    throw new AppError("Mídia não encontrada.", 404);
+  }
+
+  const rawMedia = message.getDataValue("mediaUrl") as string | null;
+  const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
+  let filePath = rawMedia ? path.resolve(publicFolder, rawMedia) : "";
+
+  if (!rawMedia || !fs.existsSync(filePath)) {
+    try {
+      const raw = JSON.parse(message.dataJson || "{}");
+      const buffer = await downloadMediaMessage(raw, "buffer", {});
+
+      let filename = rawMedia;
+      if (!filename) {
+        const documentName =
+          raw?.message?.documentMessage?.fileName ||
+          raw?.message?.documentWithCaptionMessage?.message?.documentMessage?.fileName;
+
+        if (documentName) {
+          filename = `${Date.now()}_${String(documentName).replace(/[\\/]/g, "-").replace(/ /g, "_")}`;
+        } else {
+          const mimetype =
+            raw?.message?.imageMessage?.mimetype ||
+            raw?.message?.videoMessage?.mimetype ||
+            raw?.message?.audioMessage?.mimetype ||
+            raw?.message?.stickerMessage?.mimetype ||
+            raw?.message?.documentMessage?.mimetype ||
+            raw?.message?.documentWithCaptionMessage?.message?.documentMessage?.mimetype ||
+            "application/octet-stream";
+          const ext = String(mimetype).split("/")[1]?.split(";")[0] || "bin";
+          filename = `${Date.now()}.${ext}`;
+        }
+
+        await message.update({ mediaUrl: filename });
+      }
+
+      filePath = path.resolve(publicFolder, filename);
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, buffer as Buffer);
+    } catch (err: any) {
+      throw new AppError(
+        `Não foi possível recuperar a mídia do WhatsApp: ${String(err?.message || err)}`,
+        404
+      );
+    }
+  }
+
+  const filename = path.basename(filePath);
+  res.setHeader("Content-Disposition", `inline; filename="${filename.replace(/"/g, "")}"`);
+  res.sendFile(filePath);
 };
 
 export const remove = async (
