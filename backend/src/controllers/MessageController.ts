@@ -116,7 +116,7 @@ export const media = async (
   }
 
   const rawMedia = message.getDataValue("mediaUrl") as string | null;
-  const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
+  const publicFolder = path.resolve(__dirname, "..", "..", "public");
   let filePath = rawMedia ? path.resolve(publicFolder, rawMedia) : "";
 
   if (!rawMedia || !fs.existsSync(filePath)) {
