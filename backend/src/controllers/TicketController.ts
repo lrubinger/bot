@@ -198,6 +198,54 @@ export const update = async (
   return res.status(200).json(ticket);
 };
 
+export const pin = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { companyId } = req.user;
+  const ticket = await ShowTicketService(ticketId, companyId);
+
+  if (!ticket.pinned) {
+    const pinnedCount = await Ticket.count({
+      where: { companyId, pinned: true, archived: false }
+    });
+
+    if (pinnedCount >= 5) {
+      throw new AppError("Você pode fixar no máximo 5 conversas.", 400);
+    }
+  }
+
+  await ticket.update({ pinned: true, archived: false });
+
+  const io = getIO();
+  io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-ticket`, {
+    action: "update",
+    ticket
+  });
+
+  return res.status(200).json(ticket);
+};
+
+export const unpin = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { companyId } = req.user;
+  const ticket = await ShowTicketService(ticketId, companyId);
+
+  await ticket.update({ pinned: false });
+
+  const io = getIO();
+  io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-ticket`, {
+    action: "update",
+    ticket
+  });
+
+  return res.status(200).json(ticket);
+};
+
 export const markUnread = async (
   req: Request,
   res: Response
@@ -226,7 +274,7 @@ export const archive = async (
   const { companyId } = req.user;
   const ticket = await ShowTicketService(ticketId, companyId);
 
-  await ticket.update({ archived: true });
+  await ticket.update({ archived: true, pinned: false });
 
   const io = getIO();
   io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-ticket`, {
