@@ -2136,3 +2136,52 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
   border-color:#7e8be0;
   box-shadow:0 0 0 3px rgba(103,118,219,.12);
 }
+
+
+/* WhatsApp notification sound controls */
+.sound-switch{
+  width:42px;
+  height:24px;
+  border:0;
+  border-radius:999px;
+  background:#b9c0cf;
+  padding:3px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  transition:background .18s ease;
+  align-self:center;
+}
+.sound-switch.enabled{
+  background:#3485f6;
+  justify-content:flex-end;
+}
+.sound-switch-knob{
+  width:18px;
+  height:18px;
+  border-radius:50%;
+  background:#fff;
+  display:block;
+  box-shadow:0 1px 4px rgba(0,0,0,.2);
+}
+.wa-active-sound-toggle{
+  width:42px;
+  height:42px;
+  border:1px solid #d7deeb;
+  border-radius:50%;
+  background:#fff;
+  color:var(--navy);
+  display:grid;
+  place-items:center;
+  cursor:pointer;
+  font-size:19px;
+  flex:0 0 auto;
+}
+.wa-active-sound-toggle:hover{
+  background:#f0f2f7;
+}
+.wa-active-sound-toggle.muted{
+  color:#858ca0;
+  background:#f4f5f8;
+}
