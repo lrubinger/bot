@@ -5,7 +5,6 @@ import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
-  makeInMemoryStore,
   isJidBroadcast,
   CacheStore
 } from "@whiskeysockets/baileys";
@@ -13,13 +12,13 @@ import makeWALegacySocket from "@whiskeysockets/baileys";
 import P from "pino";
 
 import Whatsapp from "../models/Whatsapp";
+import Message from "../models/Message";
 import { logger } from "../utils/logger";
 import MAIN_LOGGER from "@whiskeysockets/baileys/lib/Utils/logger";
 import authState from "../helpers/authState";
 import { Boom } from "@hapi/boom";
 import AppError from "../errors/AppError";
 import { getIO } from "./socket";
-import { Store } from "./store";
 import { StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSession";
 import DeleteBaileysService from "../services/BaileysServices/DeleteBaileysService";
 import NodeCache from 'node-cache';
@@ -29,7 +28,6 @@ loggerBaileys.level = "error";
 
 type Session = WASocket & {
   id?: number;
-  store?: Store;
 };
 
 const sessions: Session[] = [];
@@ -87,9 +85,6 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         let retriesQrCode = 0;
 
         let wsocket: Session = null;
-        const store = makeInMemoryStore({
-          logger: loggerBaileys
-        });
 
         const { state, saveState } = await authState(whatsapp);
 
@@ -121,8 +116,11 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           shouldSyncHistoryMessage: () => true,
           getMessage: async key => {
             try {
-              const stored = await store.loadMessage(key.remoteJid!, key.id!);
-              return stored?.message;
+              if (!key?.id) return undefined;
+              const stored = await Message.findByPk(key.id);
+              if (!stored?.dataJson) return undefined;
+              const raw = JSON.parse(stored.dataJson);
+              return raw?.message;
             } catch (_) {
               return undefined;
             }
@@ -278,7 +276,6 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         );
         wsocket.ev.on("creds.update", saveState);
 
-        store.bind(wsocket.ev);
       })();
     } catch (error) {
       Sentry.captureException(error);
