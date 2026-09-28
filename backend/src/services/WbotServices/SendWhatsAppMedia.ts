@@ -194,7 +194,11 @@ const SendWhatsAppMedia = async ({
     const recipients = ticket.isGroup
       ? [defaultRecipient]
       : selfChat && wbot.user?.id
-        ? [jidNormalizedUser(wbot.user.id)]
+        ? Array.from(new Set([
+            resolvedChatJid,
+            (wbot.user as any)?.lid,
+            wbot.user.id
+          ].filter(Boolean))) as string[]
         : Array.from(new Set([
             resolvedPhoneJid,
             defaultRecipient,
