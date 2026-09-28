@@ -1147,14 +1147,18 @@ function renderTicketList(list){
     const contact=t.contact||{};
     const unread=Number(t.unreadMessages||0);
     const archived=t.archived===true;
+    const pinned=t.pinned===true;
     return `<div class="wa-conversation ${String(activeTicketId)===String(t.id)?"active":""}" data-ticket-id="${t.id}" role="button" tabindex="0">
-      <span class="wa-avatar">${contact.profilePicUrl?`<img src="${esc(contact.profilePicUrl)}" alt="" />`:esc(ticketInitials(contact.name||contact.number))}</span>
+      <span class="wa-avatar">${contact.profilePicUrl?`<img src="${esc(contact.profilePicUrl)}" alt="" />`:esc(ticketInitials(ticketContactName(t)))}</span>
       <span class="wa-conversation-main">
         <span class="wa-conversation-top">
-          <b>${esc(ticketContactName(contact))}</b>
+          <b>${esc(ticketContactName(t))}</b>
           <span class="wa-conversation-meta">
             <small>${ticketTime(t.updatedAt||t.createdAt)}</small>
-            <button class="wa-conversation-menu-btn" data-ticket-menu="${t.id}" type="button" aria-label="Opções da conversa">...</button>
+            <span class="wa-conversation-controls">
+              ${pinned?`<span class="wa-pin-indicator" title="Conversa fixada">${ticketPinIcon()}</span>`:""}
+              <button class="wa-conversation-menu-btn" data-ticket-menu="${t.id}" type="button" aria-label="Opções da conversa">${ticketChevronIcon()}</button>
+            </span>
           </span>
         </span>
         <span class="wa-conversation-bottom">
@@ -1164,6 +1168,8 @@ function renderTicketList(list){
       </span>
       <div class="wa-conversation-menu hidden" data-ticket-menu-popover="${t.id}">
         <button type="button" data-ticket-action="unread" data-id="${t.id}">Marcar como não lido</button>
+        ${!contact.isGroup?`<button type="button" data-ticket-action="contact" data-id="${t.id}">Cadastrar contato</button>`:""}
+        <button type="button" data-ticket-action="${pinned?"unpin":"pin"}" data-id="${t.id}">${pinned?"Desafixar conversa":"Fixar conversa"}</button>
         <button type="button" data-ticket-action="${archived?"unarchive":"archive"}" data-id="${t.id}">${archived?"Desarquivar":"Arquivar"}</button>
       </div>
     </div>`;
@@ -1184,7 +1190,11 @@ async function fetchTicketList(includeArchived=false){
   ];
   const byId=new Map();
   merged.forEach(ticket=>byId.set(String(ticket.id),ticket));
-  return [...byId.values()].sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0));
+  return [...byId.values()].sort((a,b)=>{
+    const pinDiff=Number(!!b.pinned)-Number(!!a.pinned);
+    if(pinDiff)return pinDiff;
+    return new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0);
+  });
 }
 
 function closeTicketMenus(){
