@@ -40,6 +40,13 @@ const SendWhatsAppMessage = async ({
     );
   }
 
+  if (!resolvedChatJid && !ticket.isGroup && defaultRecipient.endsWith("@s.whatsapp.net")) {
+    try {
+      const mapped = await (wbot as any)?.signalRepository?.lidMapping?.getLIDForPN?.(defaultRecipient);
+      if (mapped) resolvedChatJid = String(mapped);
+    } catch (_) {}
+  }
+
   const contactDigits = String(ticket.contact?.number || "").replace(/\D/g, "");
   const defaultRecipientIsSafe =
     ticket.isGroup ||
