@@ -307,6 +307,7 @@ async function connections(){
               <td>${esc(formatPhoneBR(w.number||""))}</td>
               <td>
                 <button class="ghost qr" data-id="${w.id}">QR Code</button>
+                <button class="ghost sync-wa" data-id="${w.id}">Sincronizar</button>
                 <button class="ghost restart" data-id="${w.id}">Reiniciar</button>
                 <button class="ghost danger disconnect" data-id="${w.id}">Desconectar</button>
               </td>
@@ -329,6 +330,21 @@ async function connections(){
   document.querySelectorAll(".restart").forEach(b=>b.onclick=async()=>{
     await api("/whatsappsession/"+b.dataset.id,{method:"PUT"});
     setTimeout(()=>showQr(b.dataset.id),800);
+  });
+
+  document.querySelectorAll(".sync-wa").forEach(b=>b.onclick=async()=>{
+    b.disabled=true;
+    const oldText=b.textContent;
+    b.textContent="Sincronizando...";
+    try{
+      await api("/whatsappsession/"+b.dataset.id+"/sync",{method:"POST",body:"{}"});
+      alert("Sincronização iniciada. Os contatos e conversas serão atualizados conforme o histórico disponibilizado pelo WhatsApp.");
+      setTimeout(()=>connections(),2500);
+    }catch(e){
+      alert(e.message||"Não foi possível iniciar a sincronização.");
+      b.disabled=false;
+      b.textContent=oldText;
+    }
   });
 
   document.querySelectorAll(".qr").forEach(b=>b.onclick=()=>showQr(b.dataset.id));
