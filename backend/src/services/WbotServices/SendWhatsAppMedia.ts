@@ -177,20 +177,29 @@ const SendWhatsAppMedia = async ({
     const defaultRecipient = `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
     let resolvedChatJid: string | undefined;
     let resolvedPhoneJid: string | undefined;
+    let selfChat = false;
 
     if (!ticket.isGroup) {
       const resolved = await ResolveTicketAddress(ticket.id);
       resolvedChatJid = resolved.chatJid;
       resolvedPhoneJid = resolved.phoneJid;
+      const ownName = String(ticket.contact?.name || "").trim().toLowerCase();
+      selfChat = Boolean(
+        wbot.user?.id &&
+        resolved.allFromMe &&
+        (ownName === "eu" || ownName.startsWith("eu ") || ownName.startsWith("eu-") || ownName.startsWith("eu_"))
+      );
     }
 
     const recipients = ticket.isGroup
       ? [defaultRecipient]
-      : Array.from(new Set([
-          resolvedPhoneJid,
-          defaultRecipient,
-          resolvedChatJid
-        ].filter(Boolean))) as string[];
+      : selfChat && wbot.user?.id
+        ? [jidNormalizedUser(wbot.user.id)]
+        : Array.from(new Set([
+            resolvedPhoneJid,
+            defaultRecipient,
+            resolvedChatJid
+          ].filter(Boolean))) as string[];
 
     let sentMessage: WAMessage | undefined;
     let lastError: any;
