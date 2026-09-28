@@ -296,6 +296,83 @@ export const startConversation = async (
     }
   }
 
+  if (ticket && lidJid) {
+    const lidDigits = lidJid.replace(/\D/g, "");
+    const duplicateMessages = await Message.findAll({
+      where: {
+        companyId,
+        ticketId: { [Op.ne]: ticket.id },
+        dataJson: { [Op.like]: `%${lidDigits}%` }
+      },
+      attributes: ["ticketId"],
+      group: ["ticketId"]
+    });
+
+    const duplicateTicketIds = Array.from(
+      new Set(duplicateMessages.map(message => Number(message.ticketId)).filter(Boolean))
+    );
+
+    for (const duplicateTicketId of duplicateTicketIds) {
+      const duplicateTicket = await Ticket.findOne({
+        where: {
+          id: duplicateTicketId,
+          companyId,
+          whatsappId: whatsapp.id,
+          isGroup: false
+        }
+      });
+
+      if (!duplicateTicket) continue;
+
+      const duplicateContactId = duplicateTicket.contactId;
+
+      await Message.update(
+        {
+          ticketId: ticket.id,
+          contactId: contact.id
+        },
+        {
+          where: {
+            ticketId: duplicateTicket.id,
+            companyId
+          }
+        }
+      );
+
+      await duplicateTicket.update({
+        archived: true,
+        pinned: false,
+        status: "closed",
+        contactId: contact.id
+      });
+
+      if (duplicateContactId && duplicateContactId !== contact.id) {
+        const remainingTickets = await Ticket.count({
+          where: {
+            contactId: duplicateContactId,
+            companyId,
+            id: { [Op.ne]: duplicateTicket.id }
+          }
+        });
+        const remainingMessages = await Message.count({
+          where: {
+            contactId: duplicateContactId,
+            companyId
+          }
+        });
+
+        if (remainingTickets === 0 && remainingMessages === 0) {
+          await Contact.destroy({
+            where: {
+              id: duplicateContactId,
+              companyId
+            }
+          });
+        }
+      }
+    }
+  }
+
   if (!ticket) {
     ticket = await FindOrCreateTicketService(
       contact,
