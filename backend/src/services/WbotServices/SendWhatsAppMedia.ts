@@ -173,23 +173,31 @@ const SendWhatsAppMedia = async ({
       };
     }
 
-    let recipient = `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
+    const defaultRecipient = `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
+    const resolved = ticket.isGroup ? {} : await ResolveTicketAddress(ticket.id);
+    const recipients = ticket.isGroup
+      ? [defaultRecipient]
+      : Array.from(new Set([
+          resolved.chatJid,
+          resolved.phoneJid,
+          defaultRecipient
+        ].filter(Boolean))) as string[];
 
-    if (!ticket.isGroup) {
-      const resolved = await ResolveTicketAddress(ticket.id);
-      if (resolved.chatJid) {
-        recipient = resolved.chatJid;
-      } else if (resolved.phoneJid) {
-        recipient = resolved.phoneJid;
+    let sentMessage: WAMessage | undefined;
+    let lastError: any;
+
+    for (const recipient of recipients) {
+      try {
+        sentMessage = await wbot.sendMessage(recipient, { ...options });
+        if (sentMessage) break;
+      } catch (sendError) {
+        lastError = sendError;
       }
     }
 
-    const sentMessage = await wbot.sendMessage(
-      recipient,
-      {
-        ...options
-      }
-    );
+    if (!sentMessage) {
+      throw lastError || new Error("WhatsApp não retornou confirmação do envio.");
+    }
 
     await ticket.update({ lastMessage: bodyMessage });
 
