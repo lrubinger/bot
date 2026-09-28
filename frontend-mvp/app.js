@@ -1599,24 +1599,32 @@ async function openForwardMessageModal(messageId){
 }
 
 function openMessageReactionPicker(messageId){
-  const emojis=["👍","❤️","😂","😮","😢","🙏","👏","🎉","😍","😊","🔥","✅","😉","😅","🤝","📌","🚀","💯","😁","🥳","🤔","😎","💙","💚","💛","🧡","💜","🤍","🖤","👌","🙌","💪"];
+  const emojis=["👍","❤️","😂","😮","😢","🙏","👏","🎉","😍","😊","🔥","✅","😉","😅","🤝","📌","🚀","💯","😁","🥳","🤔","😎","💙","💚","💛","🧡","💜","🤍","🖤","👌","🙌","💪","😃","😄","😆","🤣","🙂","🤩","😘","😜","🤗","🤝","👀","💡","⭐","⚠️","📎","📞","📩","✅","❌"];
   modal(`
     <div class="ticket-reaction-modal">
       <h2>Escolher reação</h2>
-      <div class="ticket-reaction-grid">
-        ${emojis.map(x=>`<button type="button" data-picker-emoji="${x}">${x}</button>`).join("")}
-      </div>
+      <input id="reactionEmojiSearch" class="reaction-emoji-search" placeholder="Buscar emoji pelo símbolo" />
+      <div class="ticket-reaction-grid" id="ticketReactionGrid"></div>
     </div>
   `);
-  document.querySelectorAll("[data-picker-emoji]").forEach(btn=>btn.onclick=async()=>{
-    try{
-      await api("/messages/"+messageId+"/react",{method:"POST",body:JSON.stringify({emoji:btn.dataset.pickerEmoji})});
-      closeModal();
-      await refreshOpenTicket(activeTicketId);
-    }catch(err){
-      alert(err.message||"Não foi possível reagir à mensagem.");
-    }
-  });
+
+  const grid=$("#ticketReactionGrid");
+  const render=(query="")=>{
+    const q=String(query||"").trim();
+    const filtered=q?emojis.filter(x=>x.includes(q)):emojis;
+    grid.innerHTML=filtered.map(x=>`<button type="button" data-picker-emoji="${x}">${x}</button>`).join("");
+    grid.querySelectorAll("[data-picker-emoji]").forEach(btn=>btn.onclick=async()=>{
+      try{
+        await api("/messages/"+messageId+"/react",{method:"POST",body:JSON.stringify({emoji:btn.dataset.pickerEmoji})});
+        closeModal();
+        await refreshOpenTicket(activeTicketId);
+      }catch(err){
+        alert(err.message||"Não foi possível reagir à mensagem.");
+      }
+    });
+  };
+  $("#reactionEmojiSearch").oninput=e=>render(e.target.value);
+  render();
 }
 
 function closeMessageMenus(){
