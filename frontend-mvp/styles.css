@@ -2185,3 +2185,76 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
   color:#858ca0;
   background:#f4f5f8;
 }
+
+
+/* Message menu placement refinement */
+.wa-message-menu-trigger{
+  color:#111 !important;
+}
+.wa-message-menu-trigger svg{
+  stroke:#111 !important;
+}
+.wa-message-actions,
+.wa-message-actions>button{
+  color:#111 !important;
+}
+
+/* Short messages: keep the chevron outside the bubble, on the free side */
+.wa-message-row:not(.me) .wa-message-wrap.compact .wa-message-menu-trigger{
+  right:-29px;
+  left:auto;
+  top:4px;
+}
+.wa-message-row.me .wa-message-wrap.compact .wa-message-menu-trigger{
+  left:-29px;
+  right:auto;
+  top:4px;
+}
+
+/* Long/media messages: overlay the chevron in the upper corner to avoid layout overflow */
+.wa-message-wrap.wide .wa-message-menu-trigger{
+  top:6px;
+  right:6px;
+  left:auto;
+  background:rgba(255,255,255,.94);
+  box-shadow:0 1px 5px rgba(24,31,72,.12);
+}
+.wa-message-row.me .wa-message-wrap.wide .wa-message-menu-trigger{
+  right:6px;
+  left:auto;
+}
+.wa-message-wrap.wide .wa-message{
+  padding-right:34px;
+}
+
+/* Contact edit action */
+.wa-profile-head{
+  position:relative;
+}
+.wa-profile-edit{
+  position:absolute;
+  top:0;
+  right:0;
+  width:34px;
+  height:34px;
+  border:1px solid #d9dfeb;
+  border-radius:9px;
+  background:#fff;
+  color:#1c2552;
+  display:grid;
+  place-items:center;
+  cursor:pointer;
+  z-index:2;
+}
+.wa-profile-edit:hover{
+  background:#f1f3f8;
+}
+.wa-profile-edit svg{
+  width:17px;
+  height:17px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.8;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
