@@ -1661,3 +1661,35 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
   scrollbar-gutter:stable;
   scroll-behavior:smooth;
 }
+
+
+/* Ticket media loading */
+.ticket-media-slot{
+  min-width:150px;
+  min-height:52px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#eef1f6;
+  border:1px solid #dce2ec;
+  border-radius:9px;
+  color:#727b92;
+  font-size:11px;
+  margin-bottom:7px;
+  overflow:hidden;
+}
+.ticket-media-error{
+  color:#a33;
+  padding:12px;
+}
+.ticket-file-download{
+  display:inline-block;
+  margin:4px 0 7px;
+  color:var(--navy);
+  font-size:11px;
+  font-weight:700;
+  text-decoration:none;
+}
+.ticket-file-download:hover{
+  text-decoration:underline;
+}
