@@ -50,6 +50,10 @@ class Ticket extends Model<Ticket> {
 
   @Default(false)
   @Column
+  pinned: boolean;
+
+  @Default(false)
+  @Column
   isGroup: boolean;
 
   @CreatedAt
