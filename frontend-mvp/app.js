@@ -308,6 +308,7 @@ async function connections(){
               <td>
                 <button class="ghost qr" data-id="${w.id}">QR Code</button>
                 <button class="ghost restart" data-id="${w.id}">Reiniciar</button>
+                <button class="ghost danger disconnect" data-id="${w.id}">Desconectar</button>
               </td>
             </tr>`).join("")}
         </tbody>
@@ -331,6 +332,27 @@ async function connections(){
   });
 
   document.querySelectorAll(".qr").forEach(b=>b.onclick=()=>showQr(b.dataset.id));
+
+  document.querySelectorAll(".disconnect").forEach(b=>b.onclick=async()=>{
+    const ok=confirm(
+      "Desconectar este WhatsApp?\n\nAo confirmar, a sessão será encerrada e será obrigatório ler um novo QR Code para conectar novamente."
+    );
+    if(!ok)return;
+
+    b.disabled=true;
+    const oldText=b.textContent;
+    b.textContent="Desconectando...";
+
+    try{
+      await api("/whatsappsession/"+b.dataset.id,{method:"DELETE"});
+      alert("WhatsApp desconectado. Para conectar novamente será necessário ler um novo QR Code.");
+      await connections();
+    }catch(e){
+      alert(e.message||"Não foi possível desconectar o WhatsApp.");
+      b.disabled=false;
+      b.textContent=oldText;
+    }
+  });
 }
 
 async function showQr(id){
