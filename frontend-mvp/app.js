@@ -980,6 +980,7 @@ let ticketsRefreshTimer=null;
 let ticketMessagesRefreshTimer=null;
 let activeTicketId=null;
 let ticketsCache=[];
+let ticketAutoScroll=true;
 let ticketDetailsCollapsed=localStorage.getItem("pp_ticket_details_collapsed")==="1";
 
 function ticketStatusLabel(status){
@@ -1473,11 +1474,12 @@ async function tickets(){
 function renderTicketContactInfo(ticket){
   const c=ticket?.contact||{};
   const extra=Array.isArray(c.extraInfo)?c.extraInfo:[];
+  const resolvedNumber=ticketResolvedNumber(ticket);
   return `
     <div class="wa-profile-head">
-      <span class="wa-profile-avatar">${c.profilePicUrl?`<img src="${esc(c.profilePicUrl)}" alt="" />`:esc(ticketInitials(c.name||c.number))}</span>
-      <h3>${esc(ticketContactName(c))}</h3>
-      <span>${esc(formatPhoneBR(c.number||""))}</span>
+      <span class="wa-profile-avatar">${c.profilePicUrl?`<img src="${esc(c.profilePicUrl)}" alt="" />`:esc(ticketInitials(ticketContactName(ticket)))}</span>
+      <h3>${esc(ticketContactName(ticket))}</h3>
+      <span>${esc(formatPhoneBR(resolvedNumber))}</span>
     </div>
     <div class="wa-profile-section">
       <h4>Atendimento</h4>
@@ -1488,7 +1490,7 @@ function renderTicketContactInfo(ticket){
     </div>
     <div class="wa-profile-section">
       <h4>Dados do contato</h4>
-      <div class="wa-info-row"><span>Telefone</span><b>${esc(formatPhoneBR(c.number||""))||"—"}</b></div>
+      <div class="wa-info-row"><span>Telefone</span><b>${esc(formatPhoneBR(resolvedNumber))||"—"}</b></div>
       <div class="wa-info-row"><span>E-mail</span><b>${esc(c.email||"—")}</b></div>
       ${extra.map(x=>`<div class="wa-info-row"><span>${esc(x.name||"Informação")}</span><b>${esc(x.value||"—")}</b></div>`).join("")}
     </div>
@@ -1511,11 +1513,13 @@ async function refreshOpenTicket(id){
         box.dataset.signature=signature;
         hydrateTicketMedia(box);
       }
-      requestAnimationFrame(()=>{ box.scrollTop=box.scrollHeight; });
+      if(ticketAutoScroll){
+        requestAnimationFrame(()=>{ box.scrollTop=box.scrollHeight; });
+      }
     }
 
     const title=$("#ticketConversationTitle");
-    if(title)title.textContent=data.ticket?.contact?.name||formatPhoneBR(data.ticket?.contact?.number||"")||"Atendimento";
+    if(title)title.textContent=ticketContactName(data.ticket)||"Atendimento";
     const details=$("#ticketContactContent");
     if(details)details.innerHTML=renderTicketContactInfo(data.ticket);
   }catch(_){}
@@ -1562,7 +1566,7 @@ async function openTicket(id){
   chat.innerHTML=`
     <div class="wa-chat-head">
       <span class="wa-avatar large">${ticket.contact?.profilePicUrl?`<img src="${esc(ticket.contact.profilePicUrl)}" alt="" />`:esc(ticketInitials(ticket.contact?.name||ticket.contact?.number))}</span>
-      <div><b id="ticketConversationTitle">${esc(ticketContactName(ticket.contact)||"Atendimento")}</b><small>${esc(ticketStatusLabel(ticket.status))}</small></div>
+      <div><b id="ticketConversationTitle">${esc(ticketContactName(ticket)||"Atendimento")}</b><small>${esc(ticketStatusLabel(ticket.status))}</small></div>
       <span class="wa-chat-connection">${esc(ticket.whatsapp?.name||"WhatsApp")}</span>
     </div>
     <div class="wa-messages" id="ticketMessages">${renderTicketMessages(msgs)}</div>
@@ -1587,10 +1591,15 @@ async function openTicket(id){
 
   const box=$("#ticketMessages");
   if(box){
+    ticketAutoScroll=true;
     box.dataset.signature=msgs.map(m=>String(m.id)+":"+String(m.updatedAt||"")+":"+String(m.mediaUrl||"")).join("|");
     hydrateTicketMedia(box);
-    requestAnimationFrame(()=>{ box.scrollTop=box.scrollHeight; });
-    setTimeout(()=>{ box.scrollTop=box.scrollHeight; },80);
+    const scrollToBottom=()=>{ box.scrollTop=box.scrollHeight; };
+    requestAnimationFrame(scrollToBottom);
+    setTimeout(scrollToBottom,80);
+    box.addEventListener("scroll",()=>{
+      ticketAutoScroll=box.scrollHeight-box.scrollTop-box.clientHeight<90;
+    },{passive:true});
   }
 
   let pendingFiles=[];
@@ -1649,6 +1658,7 @@ async function openTicket(id){
     button.disabled=true;
     try{
       await sendTicketPayload(id,pendingFiles,body);
+      ticketAutoScroll=true;
       $("#msgBody").value="";
       pendingFiles=[];
       renderPreview();
