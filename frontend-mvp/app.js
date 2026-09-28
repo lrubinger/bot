@@ -1599,20 +1599,30 @@ async function openForwardMessageModal(messageId){
 }
 
 function openMessageReactionPicker(messageId){
-  const emojis=["👍","❤️","😂","😮","😢","🙏","👏","🎉","😍","😊","🔥","✅","😉","😅","🤝","📌","🚀","💯","😁","🥳","🤔","😎","💙","💚","💛","🧡","💜","🤍","🖤","👌","🙌","💪","😃","😄","😆","🤣","🙂","🤩","😘","😜","🤗","🤝","👀","💡","⭐","⚠️","📎","📞","📩","✅","❌"];
+  const emojis=[
+    ["👍","curtir positivo joinha"],["❤️","amor coração"],["😂","risada rir"],["😮","surpresa"],["😢","triste choro"],
+    ["🙏","obrigado gratidão oração"],["👏","palmas parabéns"],["🎉","festa comemoração"],["😍","apaixonado"],["😊","feliz sorriso"],
+    ["🔥","fogo ótimo"],["✅","confirmado certo"],["😉","piscada"],["😅","alívio"],["🤝","acordo parceria"],["📌","fixar alfinete"],
+    ["🚀","foguete avançar"],["💯","cem perfeito"],["😁","sorriso"],["🥳","festa"],["🤔","pensando"],["😎","legal"],
+    ["💙","coração azul"],["💚","coração verde"],["💛","coração amarelo"],["🧡","coração laranja"],["💜","coração roxo"],
+    ["🤍","coração branco"],["🖤","coração preto"],["👌","ok perfeito"],["🙌","celebrar"],["💪","força"],["😃","feliz"],
+    ["😄","alegre"],["😆","risada"],["🤣","gargalhada"],["🙂","sorriso"],["🤩","incrível"],["😘","beijo"],["😜","brincadeira"],
+    ["🤗","abraço"],["👀","olhos atenção"],["💡","ideia"],["⭐","estrela"],["⚠️","atenção alerta"],["📎","anexo"],
+    ["📞","telefone ligar"],["📩","mensagem email"],["❌","erro não"]
+  ];
   modal(`
     <div class="ticket-reaction-modal">
       <h2>Escolher reação</h2>
-      <input id="reactionEmojiSearch" class="reaction-emoji-search" placeholder="Buscar emoji pelo símbolo" />
+      <input id="reactionEmojiSearch" class="reaction-emoji-search" placeholder="Buscar emoji: coração, palmas, ok..." />
       <div class="ticket-reaction-grid" id="ticketReactionGrid"></div>
     </div>
   `);
 
   const grid=$("#ticketReactionGrid");
   const render=(query="")=>{
-    const q=String(query||"").trim();
-    const filtered=q?emojis.filter(x=>x.includes(q)):emojis;
-    grid.innerHTML=filtered.map(x=>`<button type="button" data-picker-emoji="${x}">${x}</button>`).join("");
+    const q=String(query||"").trim().toLowerCase();
+    const filtered=q?emojis.filter(([emoji,names])=>emoji.includes(q)||names.includes(q)):emojis;
+    grid.innerHTML=filtered.map(([emoji])=>`<button type="button" data-picker-emoji="${emoji}">${emoji}</button>`).join("");
     grid.querySelectorAll("[data-picker-emoji]").forEach(btn=>btn.onclick=async()=>{
       try{
         await api("/messages/"+messageId+"/react",{method:"POST",body:JSON.stringify({emoji:btn.dataset.pickerEmoji})});
