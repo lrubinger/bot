@@ -19,8 +19,10 @@ export const StartWhatsAppSession = async (
   });
 
   try {
-    const wbot = await initWASocket(whatsapp);
-    wbotMessageListener(wbot, companyId);
+    const wbot = await initWASocket(
+      whatsapp,
+      socket => wbotMessageListener(socket, companyId)
+    );
     wbotMonitor(wbot, whatsapp, companyId);
   } catch (err) {
     Sentry.captureException(err);
