@@ -59,7 +59,8 @@ const ListTicketsService = async ({
     {
       model: Contact,
       as: "contact",
-      attributes: ["id", "name", "number", "email", "profilePicUrl", "isGroup"]
+      attributes: ["id", "name", "number", "email", "profilePicUrl", "isGroup"],
+      include: ["extraInfo"]
     },
     {
       model: Queue,
@@ -224,7 +225,7 @@ const ListTicketsService = async ({
     distinct: true,
     limit,
     offset,
-    order: [["updatedAt", "DESC"]],
+    order: [["pinned", "DESC"], ["updatedAt", "DESC"]],
     subQuery: false
   });
 
