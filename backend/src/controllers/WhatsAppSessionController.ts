@@ -56,6 +56,31 @@ const update = async (req: Request, res: Response): Promise<Response> => {
   return res.status(202).json({ message: "Starting session.", status: "OPENING" });
 };
 
+const sync = async (req: Request, res: Response): Promise<Response> => {
+  const { whatsappId } = req.params;
+  const { companyId } = req.user;
+
+  const whatsapp = await ShowWhatsAppService(whatsappId, companyId);
+
+  // Reinicia o socket preservando as credenciais. Como o listener de histórico
+  // agora é registrado antes do "open", o evento messaging-history.set é
+  // capturado e contatos/conversas são reconstruídos automaticamente.
+  await removeWbot(whatsapp.id, false);
+
+  await whatsapp.update({
+    status: "OPENING",
+    qrcode: "",
+    retries: 0
+  });
+
+  void StartWhatsAppSession(whatsapp, companyId);
+
+  return res.status(202).json({
+    message: "Synchronization started.",
+    status: "OPENING"
+  });
+};
+
 const remove = async (req: Request, res: Response): Promise<Response> => {
   const { whatsappId } = req.params;
   const { companyId } = req.user;
@@ -80,4 +105,4 @@ const remove = async (req: Request, res: Response): Promise<Response> => {
   return res.status(200).json({ message: "Session disconnected." });
 };
 
-export default { store, remove, update };
+export default { store, remove, update, sync };
