@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import fs from "fs";
 import path from "path";
+import mime from "mime-types";
 import { downloadMediaMessage } from "@whiskeysockets/baileys";
 import AppError from "../errors/AppError";
 
@@ -10,6 +11,7 @@ import Message from "../models/Message";
 import Queue from "../models/Queue";
 import User from "../models/User";
 import Whatsapp from "../models/Whatsapp";
+import Contact from "../models/Contact";
 import formatBody from "../helpers/Mustache";
 
 import ListMessagesService from "../services/MessageServices/ListMessagesService";
@@ -23,6 +25,8 @@ import { verifyMessage } from "../services/WbotServices/wbotMessageListener";
 import CheckContactNumber from "../services/WbotServices/CheckNumber";
 import CheckIsValidContact from "../services/WbotServices/CheckIsValidContact";
 import GetProfilePicUrl from "../services/WbotServices/GetProfilePicUrl";
+import GetTicketWbot from "../helpers/GetTicketWbot";
+import ResolveTicketAddress from "../helpers/ResolveTicketAddress";
 import CreateOrUpdateContactService from "../services/ContactServices/CreateOrUpdateContactService";
 type IndexQuery = {
   pageNumber: string;
@@ -36,6 +40,47 @@ type MessageData = {
   quotedMsg?: Message;
   number?: string;
   closeTicket?: true;
+};
+
+const ensureMessageMediaFile = async (message: Message): Promise<{ filePath: string; filename: string; mimetype: string }> => {
+  const rawMedia = message.getDataValue("mediaUrl") as string | null;
+  const publicFolder = path.resolve(__dirname, "..", "..", "public");
+  let filePath = rawMedia ? path.resolve(publicFolder, rawMedia) : "";
+  let filename = rawMedia || "";
+
+  if (!rawMedia || !fs.existsSync(filePath)) {
+    const raw = JSON.parse(message.dataJson || "{}");
+    const buffer = await downloadMediaMessage(raw, "buffer", {});
+
+    const documentName =
+      raw?.message?.documentMessage?.fileName ||
+      raw?.message?.documentWithCaptionMessage?.message?.documentMessage?.fileName;
+
+    if (!filename) {
+      if (documentName) {
+        filename = `${Date.now()}_${String(documentName).replace(/[\\/]/g, "-").replace(/ /g, "_")}`;
+      } else {
+        const rawMime =
+          raw?.message?.imageMessage?.mimetype ||
+          raw?.message?.videoMessage?.mimetype ||
+          raw?.message?.audioMessage?.mimetype ||
+          raw?.message?.stickerMessage?.mimetype ||
+          raw?.message?.documentMessage?.mimetype ||
+          raw?.message?.documentWithCaptionMessage?.message?.documentMessage?.mimetype ||
+          "application/octet-stream";
+        const ext = String(rawMime).split("/")[1]?.split(";")[0] || "bin";
+        filename = `${Date.now()}.${ext}`;
+      }
+      await message.update({ mediaUrl: filename });
+    }
+
+    filePath = path.resolve(publicFolder, filename);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, buffer as Buffer);
+  }
+
+  const mimetype = String(mime.lookup(filePath) || "application/octet-stream");
+  return { filePath, filename: path.basename(filePath), mimetype };
 };
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
@@ -115,54 +160,128 @@ export const media = async (
     throw new AppError("Mídia não encontrada.", 404);
   }
 
-  const rawMedia = message.getDataValue("mediaUrl") as string | null;
-  const publicFolder = path.resolve(__dirname, "..", "..", "public");
-  let filePath = rawMedia ? path.resolve(publicFolder, rawMedia) : "";
+  try {
+    const { filePath, filename } = await ensureMessageMediaFile(message);
+    res.setHeader("Content-Disposition", `inline; filename="${filename.replace(/"/g, "")}"`);
+    res.sendFile(filePath);
+  } catch (err: any) {
+    throw new AppError(
+      `Não foi possível recuperar a mídia do WhatsApp: ${String(err?.message || err)}`,
+      404
+    );
+  }
+};
 
-  if (!rawMedia || !fs.existsSync(filePath)) {
-    try {
-      const raw = JSON.parse(message.dataJson || "{}");
-      const buffer = await downloadMediaMessage(raw, "buffer", {});
+export const setPending = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { messageId } = req.params;
+  const { companyId } = req.user;
+  const { pending } = req.body as { pending?: boolean };
 
-      let filename = rawMedia;
-      if (!filename) {
-        const documentName =
-          raw?.message?.documentMessage?.fileName ||
-          raw?.message?.documentWithCaptionMessage?.message?.documentMessage?.fileName;
+  const message = await Message.findOne({ where: { id: messageId, companyId } });
+  if (!message) throw new AppError("Mensagem não encontrada.", 404);
 
-        if (documentName) {
-          filename = `${Date.now()}_${String(documentName).replace(/[\\/]/g, "-").replace(/ /g, "_")}`;
-        } else {
-          const mimetype =
-            raw?.message?.imageMessage?.mimetype ||
-            raw?.message?.videoMessage?.mimetype ||
-            raw?.message?.audioMessage?.mimetype ||
-            raw?.message?.stickerMessage?.mimetype ||
-            raw?.message?.documentMessage?.mimetype ||
-            raw?.message?.documentWithCaptionMessage?.message?.documentMessage?.mimetype ||
-            "application/octet-stream";
-          const ext = String(mimetype).split("/")[1]?.split(";")[0] || "bin";
-          filename = `${Date.now()}.${ext}`;
-        }
+  await message.update({ pending: pending !== false });
+  return res.status(200).json(message);
+};
 
-        await message.update({ mediaUrl: filename });
-      }
+export const pending = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { companyId } = req.user;
 
-      filePath = path.resolve(publicFolder, filename);
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, buffer as Buffer);
-    } catch (err: any) {
-      throw new AppError(
-        `Não foi possível recuperar a mídia do WhatsApp: ${String(err?.message || err)}`,
-        404
-      );
+  const messages = await Message.findAll({
+    where: { ticketId, companyId, pending: true },
+    order: [["createdAt", "DESC"]],
+    limit: 100
+  });
+
+  return res.status(200).json(messages);
+};
+
+export const react = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { messageId } = req.params;
+  const { companyId } = req.user;
+  const { emoji } = req.body as { emoji?: string };
+
+  const message = await Message.findOne({ where: { id: messageId, companyId } });
+  if (!message) throw new AppError("Mensagem não encontrada.", 404);
+
+  const ticket = await ShowTicketService(String(message.ticketId), companyId);
+  const wbot = await GetTicketWbot(ticket);
+
+  const raw = JSON.parse(message.dataJson || "{}");
+  const key = raw?.key;
+  if (!key?.id) throw new AppError("Não foi possível identificar a mensagem no WhatsApp.", 400);
+
+  const resolved = await ResolveTicketAddress(ticket.id);
+  const recipient = ticket.isGroup
+    ? `${ticket.contact.number}@g.us`
+    : (resolved.chatJid || resolved.phoneJid || `${ticket.contact.number}@s.whatsapp.net`);
+
+  await wbot.sendMessage(recipient, {
+    react: {
+      text: String(emoji || ""),
+      key
     }
+  } as any);
+
+  await message.update({ reaction: String(emoji || "") || null });
+  return res.status(200).json(message);
+};
+
+export const forward = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { messageId } = req.params;
+  const { companyId } = req.user;
+  const { targetContactId, whatsappId } = req.body as {
+    targetContactId: number;
+    whatsappId?: number;
+  };
+
+  const source = await Message.findOne({ where: { id: messageId, companyId } });
+  if (!source) throw new AppError("Mensagem não encontrada.", 404);
+
+  const contact = await Contact.findOne({ where: { id: targetContactId, companyId } });
+  if (!contact) throw new AppError("Contato de destino não encontrado.", 404);
+
+  const sourceTicket = await ShowTicketService(String(source.ticketId), companyId);
+  const targetWhatsappId = whatsappId || sourceTicket.whatsappId;
+  const ticket = await FindOrCreateTicketService(
+    contact,
+    targetWhatsappId,
+    0,
+    companyId
+  );
+
+  const hasMedia = !!source.getDataValue("mediaUrl") ||
+    !["chat", "conversation", "extendedTextMessage", ""].includes(String(source.mediaType || ""));
+
+  if (hasMedia) {
+    const { filePath, filename, mimetype } = await ensureMessageMediaFile(source);
+    const media = {
+      path: filePath,
+      originalname: filename,
+      filename,
+      mimetype
+    } as Express.Multer.File;
+    await SendWhatsAppMedia({ media, ticket, body: source.body || "" });
+  } else {
+    await SendWhatsAppMessage({ body: source.body || "", ticket });
   }
 
-  const filename = path.basename(filePath);
-  res.setHeader("Content-Disposition", `inline; filename="${filename.replace(/"/g, "")}"`);
-  res.sendFile(filePath);
+  return res.status(200).json({ ticketId: ticket.id });
 };
+
 
 export const remove = async (
   req: Request,
