@@ -23,12 +23,20 @@ const SendWhatsAppMessage = async ({
   let options = {};
   const wbot = await GetTicketWbot(ticket);
   const defaultRecipient = `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
-  const resolved = ticket.isGroup ? {} : await ResolveTicketAddress(ticket.id);
+  let resolvedChatJid: string | undefined;
+  let resolvedPhoneJid: string | undefined;
+
+  if (!ticket.isGroup) {
+    const resolved = await ResolveTicketAddress(ticket.id);
+    resolvedChatJid = resolved.chatJid;
+    resolvedPhoneJid = resolved.phoneJid;
+  }
+
   const recipients = ticket.isGroup
     ? [defaultRecipient]
     : Array.from(new Set([
-        resolved.chatJid,
-        resolved.phoneJid,
+        resolvedChatJid,
+        resolvedPhoneJid,
         defaultRecipient
       ].filter(Boolean))) as string[];
 
