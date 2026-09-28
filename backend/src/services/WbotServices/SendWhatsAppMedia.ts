@@ -7,6 +7,7 @@ import ffmpegPath from "@ffmpeg-installer/ffmpeg";
 import AppError from "../../errors/AppError";
 import GetTicketWbot from "../../helpers/GetTicketWbot";
 import Ticket from "../../models/Ticket";
+import Message from "../../models/Message";
 import mime from "mime-types";
 import formatBody from "../../helpers/Mustache";
 
@@ -171,8 +172,34 @@ const SendWhatsAppMedia = async ({
       };
     }
 
+    let recipient = `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
+
+    if (!ticket.isGroup) {
+      const lastMessage = await Message.findOne({
+        where: { ticketId: ticket.id },
+        order: [["createdAt", "DESC"]]
+      });
+
+      if (lastMessage?.dataJson) {
+        try {
+          const raw = JSON.parse(lastMessage.dataJson);
+          const key: any = raw?.key || {};
+          const candidates = [
+            key.remoteJidAlt,
+            key.remoteJid,
+            key.participantAlt,
+            key.participant
+          ].filter(Boolean);
+          const phoneJid = candidates.find((jid: string) =>
+            String(jid).endsWith("@s.whatsapp.net")
+          );
+          if (phoneJid) recipient = phoneJid;
+        } catch (_) {}
+      }
+    }
+
     const sentMessage = await wbot.sendMessage(
-      `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`,
+      recipient,
       {
         ...options
       }
@@ -181,10 +208,11 @@ const SendWhatsAppMedia = async ({
     await ticket.update({ lastMessage: bodyMessage });
 
     return sentMessage;
-  } catch (err) {
+  } catch (err: any) {
     Sentry.captureException(err);
     console.log(err);
-    throw new AppError("ERR_SENDING_WAPP_MSG");
+    const detail = String(err?.message || err || "erro desconhecido");
+    throw new AppError(`Não foi possível enviar a mídia pelo WhatsApp: ${detail}`, 400);
   }
 };
 
