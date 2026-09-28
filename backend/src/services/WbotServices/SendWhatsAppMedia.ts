@@ -1,4 +1,4 @@
-import { WAMessage, AnyMessageContent } from "@whiskeysockets/baileys";
+import { WAMessage, AnyMessageContent, jidNormalizedUser } from "@whiskeysockets/baileys";
 import * as Sentry from "@sentry/node";
 import fs from "fs";
 import { exec } from "child_process";
@@ -188,7 +188,8 @@ const SendWhatsAppMedia = async ({
 
     for (const recipient of recipients) {
       try {
-        sentMessage = await wbot.sendMessage(recipient, { ...options });
+        const normalizedRecipient = jidNormalizedUser(recipient);
+        sentMessage = await wbot.sendMessage(normalizedRecipient, { ...options });
         if (sentMessage) break;
       } catch (sendError) {
         lastError = sendError;
