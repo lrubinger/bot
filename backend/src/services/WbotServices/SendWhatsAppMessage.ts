@@ -35,9 +35,9 @@ const SendWhatsAppMessage = async ({
   const recipients = ticket.isGroup
     ? [defaultRecipient]
     : Array.from(new Set([
-        resolvedChatJid,
         resolvedPhoneJid,
-        defaultRecipient
+        defaultRecipient,
+        resolvedChatJid
       ].filter(Boolean))) as string[];
 
   if (quotedMsg) {
