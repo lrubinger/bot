@@ -1725,6 +1725,161 @@ export const handleMessageIntegration = async (
   }
 }
 
+const findExistingTicketByConversationJid = async (
+  msg: proto.IWebMessageInfo,
+  whatsappId: number,
+  companyId: number
+): Promise<Ticket | null> => {
+  const key: any = msg.key || {};
+  const remoteJid = String(key.remoteJid || "");
+  const remoteJidAlt = String(key.remoteJidAlt || "");
+  const candidates = Array.from(
+    new Set([remoteJid, remoteJidAlt].filter(Boolean))
+  );
+
+  if (!candidates.length) return null;
+
+  const directMessage = await Message.findOne({
+    where: {
+      companyId,
+      fromMe: true,
+      remoteJid: { [Op.in]: candidates }
+    },
+    order: [["createdAt", "DESC"]]
+  });
+
+  if (directMessage) {
+    const ticket = await Ticket.findOne({
+      where: {
+        id: directMessage.ticketId,
+        companyId,
+        whatsappId,
+        isGroup: false
+      }
+    });
+    if (ticket) return ticket;
+  }
+
+  // Alguns registros antigos só preservaram o identificador alternativo
+  // dentro do dataJson. Procura por ele como fallback.
+  for (const jid of candidates) {
+    const escaped = jid.replace(/[%_]/g, "\\const handleMessage = async (
+  msg: proto.IWebMessageInfo,");
+    const historical = await Message.findOne({
+      where: {
+        companyId,
+        fromMe: true,
+        dataJson: { [Op.like]: `%${escaped}%` }
+      },
+      order: [["createdAt", "DESC"]]
+    });
+
+    if (!historical) continue;
+
+    const ticket = await Ticket.findOne({
+      where: {
+        id: historical.ticketId,
+        companyId,
+        whatsappId,
+        isGroup: false
+      }
+    });
+    if (ticket) return ticket;
+  }
+
+  return null;
+};
+
+const mergeDuplicateTicketsForRemoteJid = async (
+  targetTicket: Ticket,
+  targetContact: Contact,
+  msg: proto.IWebMessageInfo,
+  companyId: number
+): Promise<void> => {
+  const key: any = msg.key || {};
+  const candidates = Array.from(
+    new Set(
+      [String(key.remoteJid || ""), String(key.remoteJidAlt || "")]
+        .filter(Boolean)
+    )
+  );
+
+  if (!candidates.length) return;
+
+  const relatedMessages = await Message.findAll({
+    where: {
+      companyId,
+      remoteJid: { [Op.in]: candidates },
+      ticketId: { [Op.ne]: targetTicket.id }
+    },
+    attributes: ["ticketId"],
+    group: ["ticketId"]
+  });
+
+  const duplicateTicketIds = Array.from(
+    new Set(relatedMessages.map(message => Number(message.ticketId)).filter(Boolean))
+  );
+
+  for (const duplicateTicketId of duplicateTicketIds) {
+    const duplicateTicket = await Ticket.findOne({
+      where: {
+        id: duplicateTicketId,
+        companyId,
+        whatsappId: targetTicket.whatsappId,
+        isGroup: false
+      }
+    });
+    if (!duplicateTicket) continue;
+
+    const duplicateContactId = duplicateTicket.contactId;
+
+    await Message.update(
+      {
+        ticketId: targetTicket.id,
+        contactId: targetContact.id
+      },
+      {
+        where: {
+          ticketId: duplicateTicket.id,
+          companyId
+        }
+      }
+    );
+
+    await duplicateTicket.update({
+      archived: true,
+      pinned: false,
+      status: "closed",
+      contactId: targetContact.id
+    });
+
+    if (duplicateContactId && duplicateContactId !== targetContact.id) {
+      const remainingTickets = await Ticket.count({
+        where: {
+          contactId: duplicateContactId,
+          companyId,
+          id: { [Op.ne]: duplicateTicket.id }
+        }
+      });
+      const remainingMessages = await Message.count({
+        where: {
+          contactId: duplicateContactId,
+          companyId
+        }
+      });
+
+      if (remainingTickets === 0 && remainingMessages === 0) {
+        await Contact.destroy({
+          where: {
+            id: duplicateContactId,
+            companyId
+          }
+        });
+      }
+    }
+  }
+};
+
 const handleMessage = async (
   msg: proto.IWebMessageInfo,
   wbot: Session,
@@ -1784,10 +1939,32 @@ const handleMessage = async (
     }
 
     const whatsapp = await ShowWhatsAppService(wbot.id!, companyId);
-    const contact = await verifyContact(msgContact, wbot, companyId);
+
+    let contact: Contact;
+    let ticket: Ticket | null = null;
+
+    // Quando a empresa iniciou a conversa, a resposta pode voltar pelo LID
+    // interno do WhatsApp. Antes isso criava um novo contato/ticket técnico.
+    // Agora procuramos primeiro uma mensagem enviada anteriormente para o
+    // mesmo JID e continuamos exatamente naquele atendimento.
+    if (!isGroup && !msg.key.fromMe) {
+      ticket = await findExistingTicketByConversationJid(
+        msg,
+        wbot.id!,
+        companyId
+      );
+
+      if (ticket) {
+        const linkedContact = await Contact.findByPk(ticket.contactId);
+        contact = linkedContact || await verifyContact(msgContact, wbot, companyId);
+      } else {
+        contact = await verifyContact(msgContact, wbot, companyId);
+      }
+    } else {
+      contact = await verifyContact(msgContact, wbot, companyId);
+    }
 
     let unreadMessages = 0;
-
 
     if (msg.key.fromMe) {
       await cacheLayer.set(`contacts:${contact.id}:unreads`, "0");
@@ -1812,7 +1989,26 @@ const handleMessage = async (
       return;
     }
 
-    const ticket = await FindOrCreateTicketService(contact, wbot.id!, unreadMessages, companyId, groupContact);
+    if (!ticket) {
+      ticket = await FindOrCreateTicketService(
+        contact,
+        wbot.id!,
+        unreadMessages,
+        companyId,
+        groupContact
+      );
+    } else {
+      await ticket.update({
+        unreadMessages,
+        archived: false
+      });
+      await mergeDuplicateTicketsForRemoteJid(
+        ticket,
+        contact,
+        msg,
+        companyId
+      );
+    }
 
     if (!msg.key.fromMe && ticket.archived) {
       await ticket.update({ archived: false });
