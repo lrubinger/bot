@@ -1682,20 +1682,71 @@ async function openForwardMessageModal(messageId){
   `);
 
   let timer=null;
+
+  const validPhoneDigits=value=>{
+    const digits=String(value||"").replace(/\D/g,"");
+    if(digits.length===10 || digits.length===11)return digits;
+    if((digits.length===12 || digits.length===13) && digits.startsWith("55"))return digits;
+    return "";
+  };
+
   const load=async()=>{
-    const q=$("#forwardContactSearch")?.value.trim()||"";
+    const q=$("#forwardContactSearch")?.value.trim().toLowerCase()||"";
     const list=$("#forwardContactList");
     try{
-      const data=await api("/contacts?pageNumber=1&searchParam="+encodeURIComponent(q));
-      const contacts=data?.contacts||[];
-      list.innerHTML=contacts.length?contacts.map(contact=>{
+      const [ticketList,contactData]=await Promise.all([
+        fetchTicketList(false),
+        api("/contacts?pageNumber=1&searchParam="+encodeURIComponent(q))
+      ]);
+
+      const rows=new Map();
+
+      for(const ticket of ticketList||[]){
+        const contact=ticket.contact||{};
+        if(ticket.isGroup || contact.isGroup)continue;
+        const digits=validPhoneDigits(ticketResolvedNumber(ticket));
+        if(!digits)continue;
         const company=ticketCompany(contact);
-        const label=company?`${contact.name||formatPhoneBR(contact.number)} | ${company}`:(contact.name||formatPhoneBR(contact.number)||"Contato");
-        return `<button type="button" class="forward-contact-item" data-forward-contact="${contact.id}">
-          <span>${esc(label)}</span>
-          <small>${esc(formatPhoneBR(contact.number||""))}</small>
-        </button>`;
-      }).join(""):'<div class="small">Nenhum contato encontrado.</div>';
+        const label=company
+          ? `${contact.name||formatPhoneBR(digits)} | ${company}`
+          : (contact.name && !/^\d+$/.test(String(contact.name))
+              ? contact.name
+              : formatPhoneBR(digits));
+        const hay=`${label} ${digits} ${formatPhoneBR(digits)}`.toLowerCase();
+        if(q && !hay.includes(q))continue;
+        rows.set(String(contact.id),{
+          id:contact.id,
+          label,
+          number:digits
+        });
+      }
+
+      for(const contact of (contactData?.contacts||[])){
+        if(contact.isGroup || String(contact.name||"").includes("@g.us"))continue;
+        const digits=validPhoneDigits(contact.number);
+        if(!digits)continue;
+        const company=ticketCompany(contact);
+        const label=company
+          ? `${contact.name||formatPhoneBR(digits)} | ${company}`
+          : (contact.name && !/^\d+$/.test(String(contact.name))
+              ? contact.name
+              : formatPhoneBR(digits));
+        const hay=`${label} ${digits} ${formatPhoneBR(digits)}`.toLowerCase();
+        if(q && !hay.includes(q))continue;
+        if(!rows.has(String(contact.id))){
+          rows.set(String(contact.id),{id:contact.id,label,number:digits});
+        }
+      }
+
+      const contacts=[...rows.values()]
+        .sort((a,b)=>String(a.label).localeCompare(String(b.label),"pt-BR"));
+
+      list.innerHTML=contacts.length?contacts.map(contact=>`
+        <button type="button" class="forward-contact-item" data-forward-contact="${contact.id}">
+          <span>${esc(contact.label)}</span>
+          <small>${esc(formatPhoneBR(contact.number))}</small>
+        </button>
+      `).join(""):'<div class="small">Nenhum contato com telefone válido encontrado.</div>';
 
       list.querySelectorAll("[data-forward-contact]").forEach(btn=>btn.onclick=async()=>{
         const status=$("#forwardContactStatus");
@@ -1715,6 +1766,7 @@ async function openForwardMessageModal(messageId){
       list.innerHTML='<div class="small">Não foi possível carregar os contatos.</div>';
     }
   };
+
   $("#forwardContactSearch").oninput=()=>{
     clearTimeout(timer);
     timer=setTimeout(load,250);
