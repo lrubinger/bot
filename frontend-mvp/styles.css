@@ -1847,3 +1847,277 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
     grid-column:1;
   }
 }
+
+
+/* Message actions, pending and forwarding */
+.wa-message-wrap{
+  position:relative;
+  max-width:min(76%,700px);
+}
+.wa-message-row.me .wa-message-wrap{
+  margin-left:auto;
+}
+.wa-message-wrap .wa-message{
+  max-width:100%;
+}
+.wa-message-menu-trigger{
+  position:absolute;
+  top:4px;
+  right:-29px;
+  width:24px;
+  height:24px;
+  border:0;
+  border-radius:7px;
+  background:#fff;
+  color:#697189;
+  display:grid;
+  place-items:center;
+  cursor:pointer;
+  opacity:0;
+  pointer-events:none;
+  box-shadow:0 2px 8px rgba(24,31,72,.10);
+  z-index:6;
+  transition:opacity .12s ease;
+}
+.wa-message-row.me .wa-message-menu-trigger{
+  right:auto;
+  left:-29px;
+}
+.wa-message-wrap:hover .wa-message-menu-trigger,
+.wa-message-menu-trigger:focus{
+  opacity:1;
+  pointer-events:auto;
+}
+.wa-message-menu-trigger svg{
+  width:15px;
+  height:15px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:2;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.wa-message-actions{
+  position:absolute;
+  top:31px;
+  right:-6px;
+  min-width:220px;
+  padding:6px;
+  background:#fff;
+  border:1px solid #dce2ed;
+  border-radius:12px;
+  box-shadow:0 14px 34px rgba(24,31,72,.18);
+  z-index:25;
+}
+.wa-message-row.me .wa-message-actions{
+  right:auto;
+  left:-6px;
+}
+.wa-message-actions>button{
+  display:block;
+  width:100%;
+  border:0;
+  background:transparent;
+  text-align:left;
+  padding:9px 10px;
+  border-radius:8px;
+  color:#1f264a;
+  cursor:pointer;
+  font-size:12px;
+}
+.wa-message-actions>button:hover{
+  background:#f1f3f8;
+}
+.wa-message-reactions{
+  display:flex;
+  align-items:center;
+  gap:2px;
+  padding:3px 2px 7px;
+  border-bottom:1px solid #edf0f5;
+  margin-bottom:4px;
+}
+.wa-message-reactions button{
+  width:31px;
+  height:31px;
+  border:0;
+  border-radius:50%;
+  background:transparent;
+  cursor:pointer;
+  font-size:19px;
+  display:grid;
+  place-items:center;
+}
+.wa-message-reactions button:hover{
+  background:#eef1f7;
+}
+.wa-message-reaction-more{
+  font-size:20px !important;
+  color:#525a72;
+}
+.wa-message-reaction{
+  position:absolute;
+  left:9px;
+  bottom:-13px;
+  min-width:27px;
+  height:24px;
+  border-radius:999px;
+  background:#fff;
+  border:1px solid #dce2ed;
+  box-shadow:0 2px 8px rgba(24,31,72,.08);
+  display:grid;
+  place-items:center;
+  padding:0 6px;
+  font-size:15px;
+}
+.wa-message-pending-badge{
+  display:inline-block;
+  margin-top:5px;
+  padding:3px 7px;
+  border-radius:999px;
+  background:#fff4d6;
+  color:#7b5a00;
+  font-size:9px;
+  font-weight:800;
+}
+.pending-highlight .wa-message{
+  box-shadow:0 0 0 3px rgba(240,176,0,.25);
+}
+.wa-reply-preview{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:8px 13px;
+  border-top:1px solid #dfe4ed;
+  background:#f7f8fb;
+}
+.wa-reply-preview span{
+  display:grid;
+  gap:2px;
+  min-width:0;
+}
+.wa-reply-preview b{
+  color:var(--navy);
+  font-size:11px;
+}
+.wa-reply-preview small{
+  color:#6f778e;
+  max-width:520px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.wa-reply-preview button{
+  border:0;
+  background:transparent;
+  font-size:20px;
+  cursor:pointer;
+  color:#737b90;
+}
+.wa-pending-list{
+  display:grid;
+  gap:6px;
+}
+.wa-pending-empty{
+  color:var(--muted);
+  font-size:11px;
+}
+.wa-pending-item{
+  border:1px solid #e0e4ed;
+  background:#fafbfc;
+  border-radius:8px;
+  padding:8px 9px;
+  text-align:left;
+  cursor:pointer;
+  display:grid;
+  gap:3px;
+}
+.wa-pending-item:hover{
+  background:#f1f3f8;
+}
+.wa-pending-item span{
+  font-size:11px;
+  color:#232947;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.wa-pending-item small{
+  font-size:9px;
+  color:#80889d;
+}
+.ticket-forward-modal h2,
+.ticket-reaction-modal h2{
+  margin:5px 0 8px;
+  color:var(--navy);
+}
+.forward-contact-search{
+  width:100%;
+  border:1px solid #d8deeb;
+  border-radius:10px;
+  padding:11px 12px;
+  margin:12px 0;
+  background:#f7f8fb;
+}
+.forward-contact-list{
+  max-height:360px;
+  overflow-y:auto;
+  display:grid;
+  gap:5px;
+}
+.forward-contact-item{
+  border:1px solid #e0e5ef;
+  background:#fff;
+  border-radius:9px;
+  padding:9px 10px;
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  text-align:left;
+  cursor:pointer;
+}
+.forward-contact-item:hover{
+  background:#f1f4f9;
+}
+.forward-contact-item small{
+  color:#7b8398;
+  white-space:nowrap;
+}
+.ticket-reaction-grid{
+  display:grid;
+  grid-template-columns:repeat(8,1fr);
+  gap:6px;
+  max-width:360px;
+}
+.ticket-reaction-grid button{
+  width:38px;
+  height:38px;
+  border:0;
+  background:#f5f6fa;
+  border-radius:9px;
+  cursor:pointer;
+  font-size:22px;
+}
+.ticket-reaction-grid button:hover{
+  background:#e9edf5;
+}
+
+/* Keeps the composer emoji palette fully inside its white container */
+.wa-emoji-popover{
+  width:300px !important;
+  max-width:calc(100vw - 40px);
+  grid-template-columns:repeat(8,32px) !important;
+  justify-content:start;
+  box-sizing:border-box;
+  gap:3px !important;
+  padding:10px !important;
+  overflow:hidden;
+}
+.wa-emoji-popover button{
+  width:32px;
+  height:32px;
+  padding:0 !important;
+  display:grid;
+  place-items:center;
+  box-sizing:border-box;
+}
