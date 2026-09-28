@@ -1201,6 +1201,69 @@ function closeTicketMenus(){
   document.querySelectorAll(".wa-conversation-menu").forEach(menu=>menu.classList.add("hidden"));
 }
 
+async function openTicketContactModal(ticketId){
+  const ticket=ticketsCache.find(t=>String(t.id)===String(ticketId));
+  if(!ticket?.contact)return;
+
+  const contact=ticket.contact;
+  const company=ticketCompany(contact);
+  const phone=ticketResolvedNumber(ticket);
+
+  modal(`
+    <div class="ticket-contact-modal">
+      <div class="eyebrow">CONTATO</div>
+      <h2>Cadastrar contato</h2>
+      <p class="muted">Os dados salvos serão exibidos nas conversas deste cliente.</p>
+      <form id="ticketContactForm" class="ticket-contact-form">
+        <label>Nome
+          <input id="ticketContactNameInput" value="${esc((/^\d+$/.test(String(contact.name||""))||String(contact.name||"").includes("@"))?"":contact.name||"")}" required />
+        </label>
+        <label>Empresa
+          <input id="ticketContactCompanyInput" value="${esc(company)}" />
+        </label>
+        <label>E-mail
+          <input id="ticketContactEmailInput" type="email" value="${esc(contact.email||"")}" />
+        </label>
+        <label>Telefone
+          <input id="ticketContactPhoneInput" value="${esc(formatPhoneBR(phone))}" required />
+        </label>
+        <div class="ticket-contact-modal-actions">
+          <button type="button" class="ghost" id="ticketContactCancel">Cancelar</button>
+          <button type="submit" class="primary" id="ticketContactSave">Salvar contato</button>
+        </div>
+        <div id="ticketContactStatus" class="small"></div>
+      </form>
+    </div>
+  `);
+
+  $("#ticketContactCancel").onclick=closeModal;
+  $("#ticketContactForm").onsubmit=async e=>{
+    e.preventDefault();
+    const button=$("#ticketContactSave");
+    const status=$("#ticketContactStatus");
+    button.disabled=true;
+    status.textContent="Salvando...";
+    try{
+      await api("/contacts/"+contact.id+"/basic",{
+        method:"PUT",
+        body:JSON.stringify({
+          name:$("#ticketContactNameInput").value.trim(),
+          company:$("#ticketContactCompanyInput").value.trim(),
+          email:$("#ticketContactEmailInput").value.trim(),
+          number:$("#ticketContactPhoneInput").value
+        })
+      });
+      closeModal();
+      ticketsCache=await fetchTicketList($("#ticketStatusFilter")?.value==="archived");
+      filterTicketList();
+      if(String(activeTicketId)===String(ticketId))await openTicket(ticketId);
+    }catch(err){
+      status.textContent=err.message||"Não foi possível salvar o contato.";
+      button.disabled=false;
+    }
+  };
+}
+
 function bindTicketList(){
   document.querySelectorAll(".wa-conversation[data-ticket-id]").forEach(row=>{
     row.onclick=e=>{
@@ -1234,6 +1297,14 @@ function bindTicketList(){
       try{
         if(action==="unread"){
           await api("/tickets/"+id+"/mark-unread",{method:"POST",body:"{}"});
+        }else if(action==="contact"){
+          closeTicketMenus();
+          await openTicketContactModal(id);
+          return;
+        }else if(action==="pin"){
+          await api("/tickets/"+id+"/pin",{method:"POST",body:"{}"});
+        }else if(action==="unpin"){
+          await api("/tickets/"+id+"/unpin",{method:"POST",body:"{}"});
         }else if(action==="archive"){
           await api("/tickets/"+id+"/archive",{method:"POST",body:"{}"});
           if(String(activeTicketId)===String(id)){
@@ -1246,6 +1317,7 @@ function bindTicketList(){
         }else if(action==="unarchive"){
           await api("/tickets/"+id+"/unarchive",{method:"POST",body:"{}"});
         }
+        closeTicketMenus();
         ticketsCache=await fetchTicketList($("#ticketStatusFilter")?.value==="archived");
         filterTicketList();
       }catch(err){
