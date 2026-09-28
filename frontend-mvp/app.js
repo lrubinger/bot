@@ -1577,6 +1577,53 @@ function bindTicketList(){
   });
 }
 
+let ticketContactSearchTimer=null;
+
+function renderTicketContactSearchResults(contacts,existingContactIds){
+  const filtered=(contacts||[]).filter(contact=>
+    !contact.isGroup &&
+    !existingContactIds.has(String(contact.id))
+  );
+
+  if(!filtered.length)return "";
+
+  return `
+    <div class="wa-contact-search-section">
+      <div class="wa-contact-search-title">Contatos</div>
+      ${filtered.map(contact=>`
+        <button type="button" class="wa-contact-search-result" data-start-contact="${contact.id}">
+          <span class="wa-contact-search-avatar">${esc((contact.name||"?").slice(0,1).toUpperCase())}</span>
+          <span class="wa-contact-search-main">
+            <b>${esc(contact.companyName ? `${contact.name} | ${contact.companyName}` : (contact.name||formatPhoneBR(contact.number||"")))}</b>
+            <small>${esc(formatPhoneBR(contact.number||""))}</small>
+          </span>
+          <span class="wa-contact-search-action">Iniciar conversa</span>
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+async function bindTicketContactSearchResults(){
+  document.querySelectorAll("[data-start-contact]").forEach(btn=>{
+    btn.onclick=async()=>{
+      btn.disabled=true;
+      try{
+        const result=await api("/contacts/"+btn.dataset.startContact+"/start-conversation",{
+          method:"POST",
+          body:"{}"
+        });
+        ticketsCache=await fetchTicketList(false);
+        filterTicketList();
+        await openTicket(result.ticketId);
+      }catch(err){
+        alert(err.message||"Não foi possível iniciar a conversa.");
+        btn.disabled=false;
+      }
+    };
+  });
+}
+
 function filterTicketList(){
   const query=String($("#ticketSearch")?.value||"").trim().toLowerCase();
   const status=$("#ticketStatusFilter")?.value||"all";
@@ -1584,11 +1631,13 @@ function filterTicketList(){
   const filtered=ticketsCache.filter(t=>{
     const name=String(t.contact?.name||"").toLowerCase();
     const number=String(t.contact?.number||"").toLowerCase();
+    const company=String(t.contact?.companyName||"").toLowerCase();
     const last=String(t.lastMessage||"").toLowerCase();
 
     const matchesText=!query ||
       name.includes(query) ||
       number.includes(query) ||
+      company.includes(query) ||
       last.includes(query);
 
     const matchesStatus=
@@ -1600,10 +1649,36 @@ function filterTicketList(){
   });
 
   const listEl=$("#ticketConversationList");
-  if(listEl){
-    listEl.innerHTML=renderTicketList(filtered);
-    bindTicketList();
-  }
+  if(!listEl)return;
+
+  listEl.innerHTML=renderTicketList(filtered);
+  bindTicketList();
+
+  clearTimeout(ticketContactSearchTimer);
+  if(query.length<2 || status==="archived")return;
+
+  ticketContactSearchTimer=setTimeout(async()=>{
+    try{
+      const data=await api("/contacts?pageNumber=1&searchParam="+encodeURIComponent(query));
+      const currentQuery=String($("#ticketSearch")?.value||"").trim().toLowerCase();
+      if(currentQuery!==query)return;
+
+      const existingContactIds=new Set(
+        ticketsCache.map(t=>String(t.contact?.id||"")).filter(Boolean)
+      );
+      const html=renderTicketContactSearchResults(data.contacts||[],existingContactIds);
+      if(html){
+        listEl.insertAdjacentHTML("beforeend",html);
+        bindTicketContactSearchResults();
+      }else if(!filtered.length){
+        listEl.innerHTML='<div class="wa-empty-list">Nenhuma conversa ou contato encontrado.</div>';
+      }
+    }catch(_){
+      if(!filtered.length){
+        listEl.innerHTML='<div class="wa-empty-list">Nenhuma conversa encontrada.</div>';
+      }
+    }
+  },250);
 }
 
 async function refreshTicketsList(){
