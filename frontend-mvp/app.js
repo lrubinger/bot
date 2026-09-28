@@ -1001,21 +1001,39 @@ function ticketInitials(name){
   return String(name||"?").trim().split(/\s+/).slice(0,2).map(x=>x[0]||"").join("").toUpperCase()||"?";
 }
 
-function ticketContactName(contact){
-  const c=contact||{};
-  const name=String(c.name||"").trim();
-  const number=String(c.number||"").replace(/\D/g,"");
+function ticketCompany(contact){
+  const extra=Array.isArray(contact?.extraInfo)?contact.extraInfo:[];
+  const field=extra.find(x=>String(x?.name||"").toLowerCase()==="empresa");
+  return String(field?.value||"").trim();
+}
 
-  if(c.isGroup){
+function ticketResolvedNumber(ticket){
+  return String(ticket?.resolvedNumber||ticket?.contact?.number||"").replace(/\D/g,"");
+}
+
+function ticketContactName(ticket){
+  const c=ticket?.contact||{};
+  const name=String(c.name||"").trim();
+  const number=ticketResolvedNumber(ticket);
+  const company=ticketCompany(c);
+
+  if(c.isGroup || ticket?.isGroup){
     if(name && !name.includes("@g.us") && !/^\d+-\d+$/.test(name))return name;
     return "Grupo WhatsApp";
   }
 
-  if(!name || /^\d+$/.test(name) || name.includes("@lid") || name.includes("@s.whatsapp.net")){
-    return formatPhoneBR(number)||name||"Contato";
-  }
+  const technical=!name || /^\d+$/.test(name) || name.includes("@lid") || name.includes("@s.whatsapp.net") || /^\d+-\d+$/.test(name);
+  if(technical)return formatPhoneBR(number)||name||"Contato";
 
-  return name;
+  return company?`${name} | ${company}`:name;
+}
+
+function ticketPinIcon(){
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l-1 6 4 4v2H6v-2l4-4-1-6Z"/><path d="M12 15v6"/></svg>';
+}
+
+function ticketChevronIcon(){
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9 5 5 5-5"/></svg>';
 }
 
 function ticketMediaHtml(m){
@@ -1928,31 +1946,30 @@ $("#settingsClose").onclick=closeSettings;
 $("#settingsBackdrop").onclick=closeSettings;
 
 function formatPhoneBR(value){
-  const digits=String(value||"").replace(/\D/g,"").slice(0,13);
+  let digits=String(value||"").replace(/\D/g,"");
   if(!digits)return "";
 
-  if(digits.length===12 || digits.length===13){
-    const ddi=digits.slice(0,2);
-    const ddd=digits.slice(2,4);
-    const local=digits.slice(4);
+  if((digits.length===12 || digits.length===13) && digits.startsWith("55")){
+    digits=digits.slice(2);
+  }
+
+  if(digits.length===10 || digits.length===11){
+    const ddd=digits.slice(0,2);
+    const local=digits.slice(2);
     if(local.length===8){
-      return `${ddi} (${ddd}) ${local.slice(0,4)}-${local.slice(4)}`;
+      return `(${ddd}) ${local.slice(0,4)}-${local.slice(4)}`;
     }
     if(local.length===9){
-      return `${ddi} (${ddd}) ${local.slice(0,5)}-${local.slice(5)}`;
+      return `(${ddd}) ${local.slice(0,5)}-${local.slice(5)}`;
     }
   }
 
   if(digits.length<=2)return digits.length===1?`(${digits}`:`(${digits})`;
+
   const ddd=digits.slice(0,2);
   const local=digits.slice(2);
-  if(digits.length<=10){
-    const first=local.slice(0,4);
-    const last=local.slice(4,8);
-    return `(${ddd}) ${first}${last?"-"+last:""}`;
-  }
-  const first=local.slice(0,5);
-  const last=local.slice(5,9);
+  const first=local.length>8?local.slice(0,5):local.slice(0,4);
+  const last=local.length>8?local.slice(5,9):local.slice(4,8);
   return `(${ddd}) ${first}${last?"-"+last:""}`;
 }
 
