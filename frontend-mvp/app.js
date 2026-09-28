@@ -20,10 +20,18 @@ let whatsappSoundTimer = null;
 
 function playUiSound(audio){
   try{
-    audio.currentTime = 0;
-    const result = audio.play();
+    const player=audio.cloneNode(true);
+    player.volume=audio.volume;
+    const result=player.play();
     if(result?.catch) result.catch(()=>{});
   }catch(_){}
+}
+
+function playUiSoundCount(audio,count){
+  const total=Math.max(0,Math.min(Number(count)||0,8));
+  for(let i=0;i<total;i++){
+    setTimeout(()=>playUiSound(audio),i*380);
+  }
 }
 
 function updateGlobalSoundToggle(){
@@ -63,8 +71,8 @@ async function pollWhatsAppUnreadSound(){
   }
   try{
     const list=await fetchTicketList(false);
-    let playGeneral=false;
-    let playActive=false;
+    let playGeneral=0;
+    let playActive=0;
     const next=new Map();
 
     for(const ticket of list){
@@ -81,16 +89,17 @@ async function pollWhatsAppUnreadSound(){
         String(activeTicketId||"")===id &&
         document.visibilityState==="visible";
 
-      if(isActive) playActive=true;
-      else playGeneral=true;
+      const delta=unread-previous;
+      if(isActive) playActive+=delta;
+      else playGeneral+=delta;
     }
 
     whatsappUnreadSnapshot=next;
     if(!whatsappSoundPrimed){
       whatsappSoundPrimed=true;
     }else{
-      if(playActive && soundState.activeChat) playUiSound(activeChatAudio);
-      if(playGeneral && soundState.newMessages) playUiSound(notificationAudio);
+      if(playActive && soundState.activeChat) playUiSoundCount(activeChatAudio,playActive);
+      if(playGeneral && soundState.newMessages) playUiSoundCount(notificationAudio,playGeneral);
     }
   }catch(_){}
 
