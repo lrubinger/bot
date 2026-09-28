@@ -6,6 +6,7 @@ import Queue from "../../models/Queue";
 import Tag from "../../models/Tag";
 import Whatsapp from "../../models/Whatsapp";
 import Prompt from "../../models/Prompt";
+import ResolveTicketAddress from "../../helpers/ResolveTicketAddress";
 
 const ShowTicketService = async (
   id: string | number,
@@ -49,6 +50,16 @@ const ShowTicketService = async (
 
   if (!ticket) {
     throw new AppError("ERR_NO_TICKET_FOUND", 404);
+  }
+
+  if (!ticket.isGroup) {
+    const resolved = await ResolveTicketAddress(ticket.id);
+    if (resolved.number) {
+      (ticket as any).setDataValue("resolvedNumber", resolved.number);
+    }
+    if (resolved.chatJid) {
+      (ticket as any).setDataValue("resolvedJid", resolved.chatJid);
+    }
   }
 
   return ticket;
