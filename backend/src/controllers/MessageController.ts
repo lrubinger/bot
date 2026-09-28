@@ -28,6 +28,19 @@ import GetProfilePicUrl from "../services/WbotServices/GetProfilePicUrl";
 import GetTicketWbot from "../helpers/GetTicketWbot";
 import ResolveTicketAddress from "../helpers/ResolveTicketAddress";
 import CreateOrUpdateContactService from "../services/ContactServices/CreateOrUpdateContactService";
+const DELETE_ALLOWED_EMAILS = new Set([
+  "lucas.rubinger@gmail.com",
+  "financeiro@portoplan.com.br"
+]);
+
+const assertDeletePermission = async (userId: number | string): Promise<void> => {
+  const user = await User.findByPk(userId);
+  const email = String(user?.email || "").trim().toLowerCase();
+  if (!DELETE_ALLOWED_EMAILS.has(email)) {
+    throw new AppError("Você não possui permissão para excluir mensagens.", 403);
+  }
+};
+
 type IndexQuery = {
   pageNumber: string;
   markRead?: string;
@@ -290,16 +303,37 @@ export const remove = async (
   const { messageId } = req.params;
   const { companyId } = req.user;
 
-  const message = await DeleteWhatsAppMessage(messageId);
+  await assertDeletePermission(req.user.id);
 
-  const io = getIO();
-  io.to(message.ticketId.toString()).emit(`company-${companyId}-appMessage`, {
-    action: "update",
-    message
+  const existing = await Message.findOne({
+    where: { id: messageId, companyId }
   });
 
-  return res.send();
+  if (!existing) {
+    throw new AppError("Mensagem não encontrada.", 404);
+  }
+
+  if (!existing.fromMe) {
+    throw new AppError(
+      "O WhatsApp não permite apagar para o outro contato uma mensagem recebida.",
+      400
+    );
+  }
+
+  const message = await DeleteWhatsAppMessage(messageId);
+  const ticketId = message.ticketId;
+
+  await Message.destroy({ where: { id: messageId, companyId } });
+
+  const io = getIO();
+  io.to(ticketId.toString()).emit(`company-${companyId}-appMessage`, {
+    action: "delete",
+    messageId
+  });
+
+  return res.status(200).json({ message: "Mensagem excluída para todos quando permitido pelo WhatsApp." });
 };
+
 
 export const send = async (req: Request, res: Response): Promise<Response> => {
   const { whatsappId } = req.params as unknown as { whatsappId: number };
