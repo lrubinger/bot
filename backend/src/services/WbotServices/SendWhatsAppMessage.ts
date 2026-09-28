@@ -43,7 +43,12 @@ const SendWhatsAppMessage = async ({
   if (!resolvedChatJid && !ticket.isGroup && defaultRecipient.endsWith("@s.whatsapp.net")) {
     try {
       const mapped = await (wbot as any)?.signalRepository?.lidMapping?.getLIDForPN?.(defaultRecipient);
-      if (mapped) resolvedChatJid = String(mapped);
+      if (mapped) {
+        const rawMapped = String(mapped);
+        resolvedChatJid = rawMapped.includes("@")
+          ? rawMapped
+          : `${rawMapped.replace(/\D/g, "")}@lid`;
+      }
     } catch (_) {}
   }
 
