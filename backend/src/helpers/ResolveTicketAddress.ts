@@ -1,4 +1,7 @@
 import Message from "../models/Message";
+import Ticket from "../models/Ticket";
+import GetTicketWbot from "./GetTicketWbot";
+import { jidNormalizedUser } from "@whiskeysockets/baileys";
 
 export interface TicketAddress {
   chatJid?: string;
@@ -52,6 +55,25 @@ export default async function ResolveTicketAddress(
       }
 
       if (chatJid && phoneJid) break;
+    } catch (_) {}
+  }
+
+  // Conversas recentes do WhatsApp podem vir somente com @lid.
+  // Quando isso acontecer, consulta o mapeamento LID -> PN da sessão ativa.
+  if (!phoneJid && chatJid?.endsWith("@lid")) {
+    try {
+      const ticket = await Ticket.findByPk(ticketId);
+      if (ticket) {
+        const wbot: any = await GetTicketWbot(ticket);
+        const mapped =
+          await wbot?.signalRepository?.lidMapping?.getPNForLID?.(chatJid);
+        if (mapped) {
+          const normalized = jidNormalizedUser(String(mapped));
+          if (normalized?.endsWith("@s.whatsapp.net")) {
+            phoneJid = normalized;
+          }
+        }
+      }
     } catch (_) {}
   }
 
