@@ -1001,6 +1001,23 @@ function ticketInitials(name){
   return String(name||"?").trim().split(/\s+/).slice(0,2).map(x=>x[0]||"").join("").toUpperCase()||"?";
 }
 
+function ticketContactName(contact){
+  const c=contact||{};
+  const name=String(c.name||"").trim();
+  const number=String(c.number||"").replace(/\D/g,"");
+
+  if(c.isGroup){
+    if(name && !name.includes("@g.us") && !/^\d+-\d+$/.test(name))return name;
+    return "Grupo WhatsApp";
+  }
+
+  if(!name || /^\d+$/.test(name) || name.includes("@lid") || name.includes("@s.whatsapp.net")){
+    return formatPhoneBR(number)||name||"Contato";
+  }
+
+  return name;
+}
+
 function ticketMediaHtml(m){
   if(!m?.mediaUrl || !m?.id)return "";
   const type=String(m.mediaType||"").toLowerCase();
@@ -1099,7 +1116,7 @@ function renderTicketList(list){
       <span class="wa-avatar">${contact.profilePicUrl?`<img src="${esc(contact.profilePicUrl)}" alt="" />`:esc(ticketInitials(contact.name||contact.number))}</span>
       <span class="wa-conversation-main">
         <span class="wa-conversation-top">
-          <b>${esc(contact.name||formatPhoneBR(contact.number||"")||"Contato")}</b>
+          <b>${esc(ticketContactName(contact))}</b>
           <span class="wa-conversation-meta">
             <small>${ticketTime(t.updatedAt||t.createdAt)}</small>
             <button class="wa-conversation-menu-btn" data-ticket-menu="${t.id}" type="button" aria-label="Opções da conversa">...</button>
@@ -1342,7 +1359,7 @@ function renderTicketContactInfo(ticket){
   return `
     <div class="wa-profile-head">
       <span class="wa-profile-avatar">${c.profilePicUrl?`<img src="${esc(c.profilePicUrl)}" alt="" />`:esc(ticketInitials(c.name||c.number))}</span>
-      <h3>${esc(c.name||"Contato")}</h3>
+      <h3>${esc(ticketContactName(c))}</h3>
       <span>${esc(formatPhoneBR(c.number||""))}</span>
     </div>
     <div class="wa-profile-section">
@@ -1428,7 +1445,7 @@ async function openTicket(id){
   chat.innerHTML=`
     <div class="wa-chat-head">
       <span class="wa-avatar large">${ticket.contact?.profilePicUrl?`<img src="${esc(ticket.contact.profilePicUrl)}" alt="" />`:esc(ticketInitials(ticket.contact?.name||ticket.contact?.number))}</span>
-      <div><b id="ticketConversationTitle">${esc(ticket.contact?.name||formatPhoneBR(ticket.contact?.number||"")||"Atendimento")}</b><small>${esc(ticketStatusLabel(ticket.status))}</small></div>
+      <div><b id="ticketConversationTitle">${esc(ticketContactName(ticket.contact)||"Atendimento")}</b><small>${esc(ticketStatusLabel(ticket.status))}</small></div>
       <span class="wa-chat-connection">${esc(ticket.whatsapp?.name||"WhatsApp")}</span>
     </div>
     <div class="wa-messages" id="ticketMessages">${renderTicketMessages(msgs)}</div>
