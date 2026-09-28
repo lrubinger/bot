@@ -74,7 +74,7 @@ jobs:
 
           cd "$APP_DIR"
           git reset --hard HEAD
-          git clean -fd -e backend/.env -e frontend/.env -e frontend/.env.local
+          git clean -fd -e backend/.env -e backend/public/ -e frontend/.env -e frontend/.env.local
           git pull --ff-only origin "$BRANCH"
 
           cd "$APP_DIR/backend"
