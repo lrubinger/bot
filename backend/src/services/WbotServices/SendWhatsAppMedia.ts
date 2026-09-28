@@ -6,6 +6,7 @@ import path from "path";
 import ffmpegPath from "@ffmpeg-installer/ffmpeg";
 import AppError from "../../errors/AppError";
 import GetTicketWbot from "../../helpers/GetTicketWbot";
+import ResolveTicketAddress from "../../helpers/ResolveTicketAddress";
 import Ticket from "../../models/Ticket";
 import Message from "../../models/Message";
 import mime from "mime-types";
@@ -175,26 +176,11 @@ const SendWhatsAppMedia = async ({
     let recipient = `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
 
     if (!ticket.isGroup) {
-      const lastMessage = await Message.findOne({
-        where: { ticketId: ticket.id },
-        order: [["createdAt", "DESC"]]
-      });
-
-      if (lastMessage?.dataJson) {
-        try {
-          const raw = JSON.parse(lastMessage.dataJson);
-          const key: any = raw?.key || {};
-          const candidates = [
-            key.remoteJidAlt,
-            key.remoteJid,
-            key.participantAlt,
-            key.participant
-          ].filter(Boolean);
-          const phoneJid = candidates.find((jid: string) =>
-            String(jid).endsWith("@s.whatsapp.net")
-          );
-          if (phoneJid) recipient = phoneJid;
-        } catch (_) {}
+      const resolved = await ResolveTicketAddress(ticket.id);
+      if (resolved.chatJid) {
+        recipient = resolved.chatJid;
+      } else if (resolved.phoneJid) {
+        recipient = resolved.phoneJid;
       }
     }
 
