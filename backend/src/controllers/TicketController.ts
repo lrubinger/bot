@@ -1,6 +1,9 @@
 import { Request, Response } from "express";
 import { getIO } from "../libs/socket";
 import Ticket from "../models/Ticket";
+import Message from "../models/Message";
+import User from "../models/User";
+import DeleteWhatsAppMessage from "../services/WbotServices/DeleteWhatsAppMessage";
 import AppError from "../errors/AppError";
 
 import CreateTicketService from "../services/TicketServices/CreateTicketService";
@@ -10,6 +13,19 @@ import ShowTicketUUIDService from "../services/TicketServices/ShowTicketFromUUID
 import ShowTicketService from "../services/TicketServices/ShowTicketService";
 import UpdateTicketService from "../services/TicketServices/UpdateTicketService";
 import ListTicketsServiceKanban from "../services/TicketServices/ListTicketsServiceKanban";
+
+const DELETE_ALLOWED_EMAILS = new Set([
+  "lucas.rubinger@gmail.com",
+  "financeiro@portoplan.com.br"
+]);
+
+const assertDeletePermission = async (userId: number | string): Promise<void> => {
+  const user = await User.findByPk(userId);
+  const email = String(user?.email || "").trim().toLowerCase();
+  if (!DELETE_ALLOWED_EMAILS.has(email)) {
+    throw new AppError("Você não possui permissão para excluir conversas.", 403);
+  }
+};
 
 type IndexQuery = {
   searchParam: string;
@@ -312,12 +328,36 @@ export const remove = async (
   const { ticketId } = req.params;
   const { companyId } = req.user;
 
-  await ShowTicketService(ticketId, companyId);
+  await assertDeletePermission(req.user.id);
 
-  const ticket = await DeleteTicketService(ticketId);
+  const ticket = await ShowTicketService(ticketId, companyId);
+
+  const outgoingMessages = await Message.findAll({
+    where: {
+      ticketId: ticket.id,
+      companyId,
+      fromMe: true,
+      isDeleted: false
+    },
+    order: [["createdAt", "DESC"]]
+  });
+
+  let revoked = 0;
+  let revokeFailed = 0;
+
+  for (const message of outgoingMessages) {
+    try {
+      await DeleteWhatsAppMessage(message.id);
+      revoked += 1;
+    } catch (_) {
+      revokeFailed += 1;
+    }
+  }
+
+  const deletedTicket = await DeleteTicketService(ticketId);
 
   const io = getIO();
-  io.to(ticket.status)
+  io.to(deletedTicket.status)
     .to(ticketId)
     .to("notification")
     .emit(`company-${companyId}-ticket`, {
@@ -325,5 +365,11 @@ export const remove = async (
       ticketId: +ticketId
     });
 
-  return res.status(200).json({ message: "ticket deleted" });
+  return res.status(200).json({
+    message: "Conversa excluída do PortoPlan.",
+    revoked,
+    revokeFailed,
+    note:
+      "Mensagens enviadas foram removidas para todos quando o WhatsApp permitiu. Mensagens recebidas não podem ser apagadas do aparelho do outro contato."
+  });
 };
