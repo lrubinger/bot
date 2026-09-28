@@ -6,6 +6,98 @@ const state = {
   sidebarCollapsed: localStorage.getItem("pp_sidebar_collapsed") === "1"
 };
 
+const soundState = {
+  newMessages: localStorage.getItem("pp_new_message_sound") !== "0",
+  activeChat: localStorage.getItem("pp_active_chat_sound") !== "0"
+};
+const notificationAudio = new Audio("./assets/nova-mensagem.mp3");
+const activeChatAudio = new Audio("./assets/mensagem-ativa.mp3");
+notificationAudio.preload = "auto";
+activeChatAudio.preload = "auto";
+let whatsappUnreadSnapshot = new Map();
+let whatsappSoundPrimed = false;
+let whatsappSoundTimer = null;
+
+function playUiSound(audio){
+  try{
+    audio.currentTime = 0;
+    const result = audio.play();
+    if(result?.catch) result.catch(()=>{});
+  }catch(_){}
+}
+
+function updateGlobalSoundToggle(){
+  const btn=$("#newMessageSoundToggle");
+  if(!btn)return;
+  btn.classList.toggle("enabled",soundState.newMessages);
+  btn.setAttribute("aria-checked",soundState.newMessages?"true":"false");
+  btn.title=soundState.newMessages?"Som de novas mensagens ativado":"Som de novas mensagens silenciado";
+  btn.setAttribute("aria-label",btn.title);
+}
+
+function toggleGlobalSound(){
+  soundState.newMessages=!soundState.newMessages;
+  localStorage.setItem("pp_new_message_sound",soundState.newMessages?"1":"0");
+  updateGlobalSoundToggle();
+}
+
+function updateActiveChatSoundToggle(){
+  const btn=$("#activeChatSoundToggle");
+  if(!btn)return;
+  btn.textContent=soundState.activeChat?"🔊":"🔇";
+  btn.classList.toggle("muted",!soundState.activeChat);
+  btn.title=soundState.activeChat?"Som da conversa ativa ligado":"Som da conversa ativa silenciado";
+  btn.setAttribute("aria-label",btn.title);
+}
+
+function toggleActiveChatSound(){
+  soundState.activeChat=!soundState.activeChat;
+  localStorage.setItem("pp_active_chat_sound",soundState.activeChat?"1":"0");
+  updateActiveChatSoundToggle();
+}
+
+async function pollWhatsAppUnreadSound(){
+  if(!state.token){
+    clearTimeout(whatsappSoundTimer);
+    return;
+  }
+  try{
+    const list=await fetchTicketList(false);
+    let playGeneral=false;
+    let playActive=false;
+    const next=new Map();
+
+    for(const ticket of list){
+      const id=String(ticket.id);
+      const unread=Number(ticket.unreadMessages||0);
+      next.set(id,unread);
+      if(!whatsappSoundPrimed)continue;
+
+      const previous=Number(whatsappUnreadSnapshot.get(id)||0);
+      if(unread<=previous)continue;
+
+      const isActive=
+        state.page==="tickets" &&
+        String(activeTicketId||"")===id &&
+        document.visibilityState==="visible";
+
+      if(isActive) playActive=true;
+      else playGeneral=true;
+    }
+
+    whatsappUnreadSnapshot=next;
+    if(!whatsappSoundPrimed){
+      whatsappSoundPrimed=true;
+    }else{
+      if(playActive && soundState.activeChat) playUiSound(activeChatAudio);
+      if(playGeneral && soundState.newMessages) playUiSound(notificationAudio);
+    }
+  }catch(_){}
+
+  clearTimeout(whatsappSoundTimer);
+  whatsappSoundTimer=setTimeout(pollWhatsAppUnreadSound,3000);
+}
+
 const activeItems = [
   ["dashboard","Dashboard","dashboard"],
   ["contacts","Contatos","contacts"],
@@ -1837,6 +1929,7 @@ async function openTicket(id){
         <button type="button" class="wa-compose-icon" id="ticketEmoji" title="Emoji">☺</button>
       </div>
       <textarea id="msgBody" rows="1" placeholder="Digite uma mensagem"></textarea>
+      <button type="button" class="wa-active-sound-toggle" id="activeChatSoundToggle" title="Som da conversa ativa" aria-label="Som da conversa ativa">🔊</button>
       <button class="wa-send" id="sendMsg" type="submit" title="Enviar" aria-label="Enviar">
         <svg viewBox="0 0 24 24"><path d="m3 11 18-8-8 18-2-8-8-2Z"/><path d="m11 13 10-10"/></svg>
       </button>
@@ -1886,6 +1979,8 @@ async function openTicket(id){
     renderPreview();
   };
 
+  updateActiveChatSoundToggle();
+  $("#activeChatSoundToggle").onclick=toggleActiveChatSound;
   $("#ticketAttach").onclick=()=>$("#ticketFiles").click();
   $("#ticketFiles").onchange=e=>{addFiles(e.target.files);e.target.value="";};
   $("#ticketEmoji").onclick=()=>$("#ticketEmojiPopover").classList.toggle("hidden");
@@ -2317,6 +2412,7 @@ async function renderSupportChat(silent=false){
 }
 
 $("#chatBtn").onclick=openSupportChat;
+$("#newMessageSoundToggle").onclick=toggleGlobalSound;
 $("#chatClose").onclick=closeSupportChat;
 $("#chatBackdrop").onclick=closeSupportChat;
 $("#settingsClose").onclick=closeSettings;
@@ -2646,6 +2742,9 @@ function initApp(){
   loadPage();
   refreshSupportUnread();
   setInterval(refreshSupportUnread,10000);
+  updateGlobalSoundToggle();
+  clearTimeout(whatsappSoundTimer);
+  whatsappSoundTimer=setTimeout(pollWhatsAppUnreadSound,1200);
   if(state.user?.mustChangePassword) setTimeout(openForcedPasswordChange,80);
 }
 if(state.token){loginView(false);initApp()} else loginView(true);
