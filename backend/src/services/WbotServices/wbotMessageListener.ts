@@ -2446,33 +2446,68 @@ const wbotMessageListener = async (wbot: Session, companyId: number): Promise<vo
         .filter(filterMessages)
         .map(msg => msg);
 
-      if (!messages) return;
+      if (!messages?.length) return;
 
-      messages.forEach(async (message: proto.IWebMessageInfo) => {
+      for (const message of messages) {
+        try {
+          if (!message?.key?.id) continue;
 
-        const messageExists = await Message.count({
-          where: { id: message.key.id!, companyId }
-        });
+          const messageExists = await Message.count({
+            where: { id: message.key.id, companyId }
+          });
 
-        if (!messageExists) {
-          await handleMessage(message, wbot, companyId);
-          await verifyRecentCampaign(message, companyId);
-          await verifyCampaignMessageAndCloseTicket(message, companyId);
+          if (!messageExists) {
+            await handleMessage(message, wbot, companyId);
+            await verifyRecentCampaign(message, companyId);
+            await verifyCampaignMessageAndCloseTicket(message, companyId);
+          }
+        } catch (error) {
+          Sentry.captureException(error);
+          logger.error(
+            `Erro ao processar mensagem WhatsApp ${message?.key?.id || "sem-id"}: ${error}`
+          );
         }
-      });
+      }
     });
 
     wbot.ev.on("messaging-history.set", async history => {
-      const messages = (history?.messages || [])
-        .filter(filterMessages)
-        .sort((a: any, b: any) => Number(a.messageTimestamp || 0) - Number(b.messageTimestamp || 0));
+      try {
+        const messages = (history?.messages || [])
+          .filter(filterMessages)
+          .sort((a: any, b: any) => Number(a.messageTimestamp || 0) - Number(b.messageTimestamp || 0));
 
-      logger.info(
-        `Sincronizacao de historico WhatsApp: ${messages.length} mensagens recebidas`
-      );
+        logger.info(
+          `Sincronizacao de historico WhatsApp: ${messages.length} mensagens recebidas`
+        );
 
-      for (const message of messages) {
-        await handleHistoryMessage(message, wbot, companyId);
+        let processed = 0;
+        let failed = 0;
+
+        for (const message of messages) {
+          try {
+            await handleHistoryMessage(message, wbot, companyId);
+            processed += 1;
+          } catch (error) {
+            failed += 1;
+            Sentry.captureException(error);
+            logger.error(
+              `Erro na sincronizacao da mensagem ${message?.key?.id || "sem-id"}: ${error}`
+            );
+          }
+
+          // Libera o event loop periodicamente para não bloquear as rotas HTTP
+          // durante sincronizações grandes.
+          if ((processed + failed) % 50 === 0) {
+            await new Promise(resolve => setTimeout(resolve, 15));
+          }
+        }
+
+        logger.info(
+          `Sincronizacao WhatsApp concluida: ${processed} processadas, ${failed} com erro`
+        );
+      } catch (error) {
+        Sentry.captureException(error);
+        logger.error(`Erro geral na sincronizacao de historico WhatsApp: ${error}`);
       }
     });
 
