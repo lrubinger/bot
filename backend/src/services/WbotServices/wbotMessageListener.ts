@@ -421,17 +421,35 @@ const getSenderMessage = (
 };
 
 const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
-  const isGroup = msg.key.remoteJid.includes("g.us");
-  const rawNumber = msg.key.remoteJid.replace(/\D/g, "");
-  return isGroup
-    ? {
-      id: getSenderMessage(msg, wbot),
+  const key: any = msg.key || {};
+  const remoteJid = String(key.remoteJid || "");
+  const remoteJidAlt = String(key.remoteJidAlt || "");
+  const isGroup = remoteJid.includes("g.us");
+
+  if (isGroup) {
+    const sender = String(
+      key.participantAlt ||
+      key.participant ||
+      getSenderMessage(msg, wbot) ||
+      remoteJid
+    );
+    return {
+      id: sender,
       name: msg.pushName
-    }
-    : {
-      id: msg.key.remoteJid,
-      name: msg.key.fromMe ? rawNumber : msg.pushName
     };
+  }
+
+  const phoneJid =
+    (remoteJidAlt.endsWith("@s.whatsapp.net") && remoteJidAlt) ||
+    (remoteJid.endsWith("@s.whatsapp.net") && remoteJid) ||
+    remoteJid;
+
+  const rawNumber = phoneJid.replace(/\D/g, "");
+
+  return {
+    id: phoneJid,
+    name: msg.key.fromMe ? rawNumber : msg.pushName
+  };
 };
 
 const downloadMedia = async (msg: proto.IWebMessageInfo) => {
