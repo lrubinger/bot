@@ -2121,3 +2121,18 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
   place-items:center;
   box-sizing:border-box;
 }
+
+.reaction-emoji-search{
+  width:100%;
+  border:1px solid #d8deeb;
+  border-radius:10px;
+  padding:10px 12px;
+  margin:6px 0 12px;
+  background:#f7f8fb;
+  color:#20264a;
+  outline:none;
+}
+.reaction-emoji-search:focus{
+  border-color:#7e8be0;
+  box-shadow:0 0 0 3px rgba(103,118,219,.12);
+}
