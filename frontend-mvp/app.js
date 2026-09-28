@@ -1002,19 +1002,77 @@ function ticketInitials(name){
 }
 
 function ticketMediaHtml(m){
-  if(!m?.mediaUrl)return "";
+  if(!m?.mediaUrl || !m?.id)return "";
   const type=String(m.mediaType||"").toLowerCase();
-  const url=esc(m.mediaUrl);
-  if(type.startsWith("image") || ["image","sticker"].includes(type)){
-    return `<a class="ticket-media-link" href="${url}" target="_blank" rel="noopener"><img class="ticket-media-image" src="${url}" alt="Imagem enviada" /></a>`;
+  const id=esc(m.id);
+  const name=esc(String(m.body||"arquivo"));
+  let kind="file";
+  if(type.startsWith("image") || ["image","sticker"].includes(type))kind="image";
+  else if(type.startsWith("video") || type==="video")kind="video";
+  else if(type.startsWith("audio") || type==="audio" || type==="ptt")kind="audio";
+
+  if(kind==="file"){
+    return `<a class="ticket-file-link" href="#" data-media-id="${id}" data-media-kind="file" data-media-name="${name}">📎 ${name||"Baixar arquivo"}</a>`;
   }
-  if(type.startsWith("video") || type==="video"){
-    return `<video class="ticket-media-video" controls preload="metadata" src="${url}"></video>`;
-  }
-  if(type.startsWith("audio") || type==="audio" || type==="ptt"){
-    return `<audio class="ticket-media-audio" controls preload="metadata" src="${url}"></audio>`;
-  }
-  return `<a class="ticket-file-link" href="${url}" target="_blank" rel="noopener">📎 Abrir arquivo</a>`;
+
+  return `<div class="ticket-media-slot" data-media-id="${id}" data-media-kind="${kind}" data-media-name="${name}">
+    <span>Carregando ${kind==="image"?"imagem":kind==="video"?"vídeo":"áudio"}...</span>
+  </div>`;
+}
+
+async function hydrateTicketMedia(container){
+  if(!container)return;
+  const nodes=[...container.querySelectorAll("[data-media-id]")];
+
+  await Promise.all(nodes.map(async node=>{
+    if(node.dataset.mediaLoaded==="1")return;
+    node.dataset.mediaLoaded="1";
+
+    try{
+      const headers={};
+      if(state.token)headers.Authorization=`Bearer ${state.token}`;
+      let response=await fetch(API+"/messages/"+encodeURIComponent(node.dataset.mediaId)+"/media",{
+        credentials:"include",
+        headers
+      });
+
+      if((response.status===401 || response.status===403) && typeof refreshSession==="function"){
+        await refreshSession();
+        if(state.token)headers.Authorization=`Bearer ${state.token}`;
+        response=await fetch(API+"/messages/"+encodeURIComponent(node.dataset.mediaId)+"/media",{
+          credentials:"include",
+          headers
+        });
+      }
+
+      if(!response.ok)throw new Error("HTTP "+response.status);
+
+      const blob=await response.blob();
+      const url=URL.createObjectURL(blob);
+      const kind=node.dataset.mediaKind;
+      const name=node.dataset.mediaName||"arquivo";
+
+      if(kind==="image"){
+        node.innerHTML=`<a class="ticket-media-link" href="${url}" target="_blank" rel="noopener"><img class="ticket-media-image" src="${url}" alt="Imagem enviada" /></a>`;
+      }else if(kind==="video"){
+        node.innerHTML=`<video class="ticket-media-video" controls preload="metadata" src="${url}"></video><a class="ticket-file-download" href="${url}" download="${esc(name)}">Baixar vídeo</a>`;
+      }else if(kind==="audio"){
+        node.innerHTML=`<audio class="ticket-media-audio" controls preload="metadata" src="${url}"></audio><a class="ticket-file-download" href="${url}" download="${esc(name)}">Baixar áudio</a>`;
+      }else{
+        node.href=url;
+        node.download=name;
+        node.target="_blank";
+        node.rel="noopener";
+      }
+    }catch(err){
+      if(node.tagName==="A"){
+        node.removeAttribute("href");
+        node.textContent="📎 Arquivo indisponível";
+      }else{
+        node.innerHTML='<span class="ticket-media-error">Mídia indisponível</span>';
+      }
+    }
+  }));
 }
 
 function renderTicketMessages(messages){
@@ -1312,9 +1370,12 @@ async function refreshOpenTicket(id){
 
     const box=$("#ticketMessages");
     if(box){
-      const html=renderTicketMessages(data.messages||[]);
-      if(box.innerHTML!==html){
-        box.innerHTML=html;
+      const messages=data.messages||[];
+      const signature=messages.map(m=>String(m.id)+":"+String(m.updatedAt||"")+":"+String(m.mediaUrl||"")).join("|");
+      if(box.dataset.signature!==signature){
+        box.innerHTML=renderTicketMessages(messages);
+        box.dataset.signature=signature;
+        hydrateTicketMedia(box);
       }
       requestAnimationFrame(()=>{ box.scrollTop=box.scrollHeight; });
     }
@@ -1392,6 +1453,8 @@ async function openTicket(id){
 
   const box=$("#ticketMessages");
   if(box){
+    box.dataset.signature=msgs.map(m=>String(m.id)+":"+String(m.updatedAt||"")+":"+String(m.mediaUrl||"")).join("|");
+    hydrateTicketMedia(box);
     requestAnimationFrame(()=>{ box.scrollTop=box.scrollHeight; });
     setTimeout(()=>{ box.scrollTop=box.scrollHeight; },80);
   }
