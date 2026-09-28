@@ -3,6 +3,7 @@ import WALegacySocket from "@whiskeysockets/baileys"
 import * as Sentry from "@sentry/node";
 import AppError from "../../errors/AppError";
 import GetTicketWbot from "../../helpers/GetTicketWbot";
+import ResolveTicketAddress from "../../helpers/ResolveTicketAddress";
 import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 
@@ -24,33 +25,11 @@ const SendWhatsAppMessage = async ({
   let number = `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
 
   if (!ticket.isGroup) {
-    const lastMessage = await Message.findOne({
-      where: { ticketId: ticket.id },
-      order: [["createdAt", "DESC"]]
-    });
-
-    if (lastMessage?.dataJson) {
-      try {
-        const raw = JSON.parse(lastMessage.dataJson);
-        const key: any = raw?.key || {};
-        const candidates = [
-          key.remoteJidAlt,
-          key.remoteJid,
-          key.participantAlt,
-          key.participant
-        ].filter(Boolean);
-
-        const phoneJid = candidates.find((jid: string) =>
-          String(jid).endsWith("@s.whatsapp.net")
-        );
-
-        if (phoneJid) number = phoneJid;
-      } catch (_) {}
-    }
-
-    if (!String(number).endsWith("@s.whatsapp.net")) {
-      const normalized = String(ticket.contact.number || "").replace(/\D/g, "");
-      number = `${normalized}@s.whatsapp.net`;
+    const resolved = await ResolveTicketAddress(ticket.id);
+    if (resolved.chatJid) {
+      number = resolved.chatJid;
+    } else if (resolved.phoneJid) {
+      number = resolved.phoneJid;
     }
   }
 
