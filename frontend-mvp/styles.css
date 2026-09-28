@@ -2320,3 +2320,80 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
   text-overflow:ellipsis;
   white-space:nowrap;
 }
+
+
+/* Contacts search and pagination */
+.contacts-toolbar-actions{
+  flex-wrap:wrap;
+}
+.contacts-search-wrap{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex:1 1 420px;
+  min-width:280px;
+}
+.contacts-search-wrap input{
+  width:min(520px,100%);
+  min-width:220px;
+  border:1px solid #d7deeb;
+  border-radius:10px;
+  padding:10px 12px;
+  background:#fff;
+  color:#1f264a;
+  outline:none;
+}
+.contacts-search-wrap input:focus{
+  border-color:#7e8be0;
+  box-shadow:0 0 0 3px rgba(103,118,219,.12);
+}
+.contacts-total{
+  color:#7a8296;
+  font-size:11px;
+  white-space:nowrap;
+}
+.contacts-pagination{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  flex-wrap:wrap;
+  padding:12px 2px 2px;
+}
+.contacts-page-numbers{
+  display:flex;
+  align-items:center;
+  gap:4px;
+}
+.contacts-page-btn{
+  min-width:32px;
+  height:32px;
+  border:1px solid #d8deeb;
+  border-radius:8px;
+  background:#fff;
+  color:#30375d;
+  cursor:pointer;
+}
+.contacts-page-btn:hover{
+  background:#f1f3f8;
+}
+.contacts-page-btn.active{
+  background:#1f2b61;
+  border-color:#1f2b61;
+  color:#fff;
+}
+.contacts-page-gap{
+  padding:0 3px;
+  color:#8b92a4;
+}
+@media(max-width:760px){
+  .contacts-search-wrap{
+    flex-basis:100%;
+  }
+  .contacts-search-wrap input{
+    width:100%;
+  }
+  .contacts-pagination{
+    justify-content:center;
+  }
+}
