@@ -1521,6 +1521,185 @@ async function tickets(){
   ticketsRefreshTimer=setTimeout(refreshTicketsList,3000);
 }
 
+async function loadTicketPending(ticketId){
+  const box=$("#ticketPendingList");
+  if(!box)return;
+  try{
+    const items=await api("/messages/"+ticketId+"/pending");
+    if(!items?.length){
+      box.innerHTML='<div class="wa-pending-empty">Nenhuma pendência nesta conversa.</div>';
+      return;
+    }
+    box.innerHTML=items.map(m=>`<button type="button" class="wa-pending-item" data-pending-message="${esc(m.id)}">
+      <span>${esc(messagePreviewText(m))}</span>
+      <small>${ticketTime(m.createdAt)}</small>
+    </button>`).join("");
+    box.querySelectorAll("[data-pending-message]").forEach(btn=>btn.onclick=()=>{
+      const row=document.querySelector(`[data-message-row="${CSS.escape(btn.dataset.pendingMessage)}"]`);
+      row?.scrollIntoView({behavior:"smooth",block:"center"});
+      row?.classList.add("pending-highlight");
+      setTimeout(()=>row?.classList.remove("pending-highlight"),1200);
+    });
+  }catch(err){
+    box.innerHTML='<div class="wa-pending-empty">Não foi possível carregar as pendências.</div>';
+  }
+}
+
+async function openForwardMessageModal(messageId){
+  modal(`
+    <div class="ticket-forward-modal">
+      <div class="eyebrow">ENCAMINHAR</div>
+      <h2>Encaminhar mensagem</h2>
+      <p class="muted">Escolha um contato do WhatsApp.</p>
+      <input id="forwardContactSearch" class="forward-contact-search" placeholder="Buscar nome, empresa ou telefone" />
+      <div id="forwardContactList" class="forward-contact-list"><div class="small">Carregando contatos...</div></div>
+      <div id="forwardContactStatus" class="small"></div>
+    </div>
+  `);
+
+  let timer=null;
+  const load=async()=>{
+    const q=$("#forwardContactSearch")?.value.trim()||"";
+    const list=$("#forwardContactList");
+    try{
+      const data=await api("/contacts?pageNumber=1&searchParam="+encodeURIComponent(q));
+      const contacts=data?.contacts||[];
+      list.innerHTML=contacts.length?contacts.map(contact=>{
+        const company=ticketCompany(contact);
+        const label=company?`${contact.name||formatPhoneBR(contact.number)} | ${company}`:(contact.name||formatPhoneBR(contact.number)||"Contato");
+        return `<button type="button" class="forward-contact-item" data-forward-contact="${contact.id}">
+          <span>${esc(label)}</span>
+          <small>${esc(formatPhoneBR(contact.number||""))}</small>
+        </button>`;
+      }).join(""):'<div class="small">Nenhum contato encontrado.</div>';
+
+      list.querySelectorAll("[data-forward-contact]").forEach(btn=>btn.onclick=async()=>{
+        const status=$("#forwardContactStatus");
+        status.textContent="Encaminhando...";
+        try{
+          await api("/messages/"+messageId+"/forward",{
+            method:"POST",
+            body:JSON.stringify({targetContactId:Number(btn.dataset.forwardContact)})
+          });
+          status.textContent="Mensagem encaminhada.";
+          setTimeout(closeModal,500);
+        }catch(err){
+          status.textContent=err.message||"Não foi possível encaminhar.";
+        }
+      });
+    }catch(err){
+      list.innerHTML='<div class="small">Não foi possível carregar os contatos.</div>';
+    }
+  };
+  $("#forwardContactSearch").oninput=()=>{
+    clearTimeout(timer);
+    timer=setTimeout(load,250);
+  };
+  load();
+}
+
+function openMessageReactionPicker(messageId){
+  const emojis=["👍","❤️","😂","😮","😢","🙏","👏","🎉","😍","😊","🔥","✅","😉","😅","🤝","📌","🚀","💯","😁","🥳","🤔","😎","💙","💚","💛","🧡","💜","🤍","🖤","👌","🙌","💪"];
+  modal(`
+    <div class="ticket-reaction-modal">
+      <h2>Escolher reação</h2>
+      <div class="ticket-reaction-grid">
+        ${emojis.map(x=>`<button type="button" data-picker-emoji="${x}">${x}</button>`).join("")}
+      </div>
+    </div>
+  `);
+  document.querySelectorAll("[data-picker-emoji]").forEach(btn=>btn.onclick=async()=>{
+    try{
+      await api("/messages/"+messageId+"/react",{method:"POST",body:JSON.stringify({emoji:btn.dataset.pickerEmoji})});
+      closeModal();
+      await refreshOpenTicket(activeTicketId);
+    }catch(err){
+      alert(err.message||"Não foi possível reagir à mensagem.");
+    }
+  });
+}
+
+function closeMessageMenus(){
+  document.querySelectorAll(".wa-message-actions").forEach(menu=>menu.classList.add("hidden"));
+}
+
+function bindTicketMessageActions(ticketId){
+  document.querySelectorAll("[data-message-menu-trigger]").forEach(btn=>{
+    btn.onclick=e=>{
+      e.stopPropagation();
+      const id=btn.dataset.messageMenuTrigger;
+      const menu=document.querySelector(`[data-message-menu="${CSS.escape(id)}"]`);
+      const hidden=menu?.classList.contains("hidden");
+      closeMessageMenus();
+      if(menu && hidden)menu.classList.remove("hidden");
+    };
+  });
+
+  document.querySelectorAll("[data-message-react]").forEach(btn=>btn.onclick=async e=>{
+    e.stopPropagation();
+    try{
+      await api("/messages/"+btn.dataset.messageReact+"/react",{
+        method:"POST",
+        body:JSON.stringify({emoji:btn.dataset.emoji})
+      });
+      closeMessageMenus();
+      await refreshOpenTicket(ticketId);
+    }catch(err){
+      alert(err.message||"Não foi possível reagir.");
+    }
+  });
+
+  document.querySelectorAll("[data-message-reaction-more]").forEach(btn=>btn.onclick=e=>{
+    e.stopPropagation();
+    closeMessageMenus();
+    openMessageReactionPicker(btn.dataset.messageReactionMore);
+  });
+
+  document.querySelectorAll("[data-message-action]").forEach(btn=>btn.onclick=async e=>{
+    e.stopPropagation();
+    const id=btn.dataset.id;
+    const action=btn.dataset.messageAction;
+    const message=ticketMessagesCache.find(m=>String(m.id)===String(id));
+
+    if(action==="reply"){
+      ticketReplyingMessage=message||{id};
+      const preview=$("#ticketReplyPreview");
+      if(preview){
+        preview.classList.remove("hidden");
+        preview.innerHTML=`<span><b>Responder</b><small>${esc(messagePreviewText(message))}</small></span><button type="button" id="cancelTicketReply">×</button>`;
+        $("#cancelTicketReply").onclick=()=>{
+          ticketReplyingMessage=null;
+          preview.classList.add("hidden");
+          preview.innerHTML="";
+        };
+      }
+      $("#msgBody")?.focus();
+      closeMessageMenus();
+      return;
+    }
+
+    if(action==="forward"){
+      closeMessageMenus();
+      openForwardMessageModal(id);
+      return;
+    }
+
+    if(action==="pending"){
+      try{
+        await api("/messages/"+id+"/pending",{
+          method:"POST",
+          body:JSON.stringify({pending:!(message?.pending===true)})
+        });
+        closeMessageMenus();
+        await refreshOpenTicket(ticketId);
+        await loadTicketPending(ticketId);
+      }catch(err){
+        alert(err.message||"Não foi possível atualizar a pendência.");
+      }
+    }
+  });
+}
+
 function renderTicketContactInfo(ticket){
   const c=ticket?.contact||{};
   const extra=Array.isArray(c.extraInfo)?c.extraInfo:[];
@@ -1543,6 +1722,10 @@ function renderTicketContactInfo(ticket){
       <div class="wa-info-row"><span>Telefone</span><b>${esc(formatPhoneBR(resolvedNumber))||"—"}</b></div>
       <div class="wa-info-row"><span>E-mail</span><b>${esc(c.email||"—")}</b></div>
       ${extra.map(x=>`<div class="wa-info-row"><span>${esc(x.name||"Informação")}</span><b>${esc(x.value||"—")}</b></div>`).join("")}
+    </div>
+    <div class="wa-profile-section">
+      <h4>Pendências</h4>
+      <div id="ticketPendingList" class="wa-pending-list"><div class="wa-pending-empty">Carregando...</div></div>
     </div>
     ${Array.isArray(ticket?.tags)&&ticket.tags.length?`<div class="wa-profile-section"><h4>Etiquetas</h4><div class="wa-tags">${ticket.tags.map(tag=>`<span>${esc(tag.name)}</span>`).join("")}</div></div>`:""}
   `;
