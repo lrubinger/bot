@@ -19,10 +19,13 @@ import SimpleListService, {
 import ContactCustomField from "../models/ContactCustomField";
 import Ticket from "../models/Ticket";
 import Contact from "../models/Contact";
+import Message from "../models/Message";
+import { getWbot } from "../libs/wbot";
 import { Op } from "sequelize";
 import CreateTicketService from "../services/TicketServices/CreateTicketService";
 import FindOrCreateTicketService from "../services/TicketServices/FindOrCreateTicketService";
 import GetDefaultWhatsApp from "../helpers/GetDefaultWhatsApp";
+import ResolveTicketAddress from "../helpers/ResolveTicketAddress";
 
 type IndexQuery = {
   searchParam: string;
@@ -196,18 +199,18 @@ export const startConversation = async (
   }
 
   const whatsapp = await GetDefaultWhatsApp(companyId, +userId);
+  const wbot: any = getWbot(whatsapp.id);
 
-  // Valida e normaliza o número no momento em que a conversa é iniciada.
-  // Isso evita criar um atendimento com um telefone importado em formato
-  // diferente do JID real usado pelo WhatsApp.
   const digits = String(contact.number || "").replace(/\D/g, "");
   if (!digits) {
     throw new AppError("Este contato não possui telefone válido.", 400);
   }
 
+  let phoneJid = "";
   try {
     const validNumber = await CheckContactNumber(digits, companyId);
-    const normalized = String(validNumber?.jid || "").replace(/\D/g, "");
+    phoneJid = String(validNumber?.jid || "");
+    const normalized = phoneJid.replace(/\D/g, "");
     if (normalized && normalized !== digits) {
       await contact.update({ number: normalized });
     }
@@ -220,14 +223,90 @@ export const startConversation = async (
     );
   }
 
-  const ticket = await FindOrCreateTicketService(
-    contact,
-    whatsapp.id,
-    0,
-    companyId
-  );
+  // Se a conversa já chegou antes pelo identificador LID do WhatsApp,
+  // encontra esse ticket e o religa ao contato correto da agenda. Isso evita
+  // criar uma segunda conversa para a mesma pessoa.
+  let lidJid = "";
+  try {
+    const mapped = await wbot?.signalRepository?.lidMapping?.getLIDForPN?.(phoneJid);
+    if (mapped) lidJid = String(mapped);
+  } catch (_) {}
+
+  let ticket: Ticket | null = await Ticket.findOne({
+    where: {
+      contactId: contact.id,
+      companyId,
+      whatsappId: whatsapp.id
+    },
+    order: [["updatedAt", "DESC"]]
+  });
+
+  if (!ticket && lidJid) {
+    const lidDigits = lidJid.replace(/\D/g, "");
+    const candidateMessage = await Message.findOne({
+      where: {
+        companyId,
+        dataJson: { [Op.like]: `%${lidDigits}%` }
+      },
+      order: [["createdAt", "DESC"]]
+    });
+
+    if (candidateMessage) {
+      const candidateTicket = await Ticket.findOne({
+        where: {
+          id: candidateMessage.ticketId,
+          companyId,
+          whatsappId: whatsapp.id
+        }
+      });
+
+      if (candidateTicket && !candidateTicket.isGroup) {
+        const oldContactId = candidateTicket.contactId;
+
+        await candidateTicket.update({
+          contactId: contact.id,
+          status: "open",
+          userId: +userId,
+          whatsappId: whatsapp.id,
+          archived: false
+        });
+
+        await Message.update(
+          { contactId: contact.id },
+          { where: { ticketId: candidateTicket.id, companyId } }
+        );
+
+        if (oldContactId && oldContactId !== contact.id) {
+          const remainingTickets = await Ticket.count({
+            where: { contactId: oldContactId, companyId }
+          });
+          const remainingMessages = await Message.count({
+            where: { contactId: oldContactId, companyId }
+          });
+
+          if (remainingTickets === 0 && remainingMessages === 0) {
+            await Contact.destroy({
+              where: { id: oldContactId, companyId }
+            });
+          }
+        }
+
+        ticket = candidateTicket;
+      }
+    }
+  }
+
+  if (!ticket) {
+    ticket = await FindOrCreateTicketService(
+      contact,
+      whatsapp.id,
+      0,
+      companyId
+    );
+  }
 
   await ticket.update({
+    contactId: contact.id,
     status: "open",
     userId: +userId,
     whatsappId: whatsapp.id,
