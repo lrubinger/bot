@@ -1740,11 +1740,13 @@ async function refreshOpenTicket(id){
     const box=$("#ticketMessages");
     if(box){
       const messages=data.messages||[];
-      const signature=messages.map(m=>String(m.id)+":"+String(m.updatedAt||"")+":"+String(m.mediaUrl||"")).join("|");
+      ticketMessagesCache=messages;
+      const signature=messages.map(m=>String(m.id)+":"+String(m.updatedAt||"")+":"+String(m.mediaUrl||"")+":"+String(m.pending||"")+":"+String(m.reaction||"")).join("|");
       if(box.dataset.signature!==signature){
         box.innerHTML=renderTicketMessages(messages);
         box.dataset.signature=signature;
         hydrateTicketMedia(box);
+        bindTicketMessageActions(id);
       }
       if(ticketAutoScroll){
         requestAnimationFrame(()=>{ box.scrollTop=box.scrollHeight; });
@@ -1755,15 +1757,19 @@ async function refreshOpenTicket(id){
     if(title)title.textContent=ticketContactName(data.ticket)||"Atendimento";
     const details=$("#ticketContactContent");
     if(details)details.innerHTML=renderTicketContactInfo(data.ticket);
+    loadTicketPending(id);
   }catch(_){}
 
   clearTimeout(ticketMessagesRefreshTimer);
   if(state.page==="tickets")ticketMessagesRefreshTimer=setTimeout(()=>refreshOpenTicket(id),1500);
 }
 
-async function sendTicketPayload(id,files=[],body=""){
+async function sendTicketPayload(id,files=[],body="",quotedMsg=null){
   if(!files.length){
-    await api("/messages/"+id,{method:"POST",body:JSON.stringify({body})});
+    await api("/messages/"+id,{method:"POST",body:JSON.stringify({
+      body,
+      quotedMsg:quotedMsg?{id:quotedMsg.id}:undefined
+    })});
     return;
   }
   const form=new FormData();
@@ -1792,6 +1798,8 @@ async function openTicket(id){
   const data=await api("/messages/"+id+"?pageNumber=1");
   const ticket=data.ticket||{};
   const msgs=data.messages||[];
+  ticketMessagesCache=msgs;
+  ticketReplyingMessage=null;
   const chat=$("#ticketChatPanel");
   const details=$("#ticketContactContent");
   if(!chat)return;
@@ -1803,6 +1811,7 @@ async function openTicket(id){
       <span class="wa-chat-connection">${esc(ticket.whatsapp?.name||"WhatsApp")}</span>
     </div>
     <div class="wa-messages" id="ticketMessages">${renderTicketMessages(msgs)}</div>
+    <div class="wa-reply-preview hidden" id="ticketReplyPreview"></div>
     <div class="wa-upload-preview hidden" id="ticketUploadPreview"></div>
     <form class="wa-composer" id="ticketComposer">
       <div class="wa-compose-actions">
@@ -1821,12 +1830,14 @@ async function openTicket(id){
   `;
 
   if(details)details.innerHTML=renderTicketContactInfo(ticket);
+  loadTicketPending(id);
 
   const box=$("#ticketMessages");
   if(box){
     ticketAutoScroll=true;
     box.dataset.signature=msgs.map(m=>String(m.id)+":"+String(m.updatedAt||"")+":"+String(m.mediaUrl||"")).join("|");
     hydrateTicketMedia(box);
+    bindTicketMessageActions(id);
     const scrollToBottom=()=>{ box.scrollTop=box.scrollHeight; };
     requestAnimationFrame(scrollToBottom);
     setTimeout(scrollToBottom,80);
@@ -1890,8 +1901,14 @@ async function openTicket(id){
     const button=$("#sendMsg");
     button.disabled=true;
     try{
-      await sendTicketPayload(id,pendingFiles,body);
+      await sendTicketPayload(id,pendingFiles,body,ticketReplyingMessage);
       ticketAutoScroll=true;
+      ticketReplyingMessage=null;
+      const replyPreview=$("#ticketReplyPreview");
+      if(replyPreview){
+        replyPreview.classList.add("hidden");
+        replyPreview.innerHTML="";
+      }
       $("#msgBody").value="";
       pendingFiles=[];
       renderPreview();
