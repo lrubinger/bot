@@ -2258,3 +2258,18 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
   stroke-linecap:round;
   stroke-linejoin:round;
 }
+
+
+/* Delayed message action hover and destructive actions */
+.wa-message-wrap.menu-hover-hold .wa-message-menu-trigger{
+  opacity:1;
+  pointer-events:auto;
+}
+.wa-message-actions .danger,
+.wa-conversation-menu .danger{
+  color:#c62828 !important;
+}
+.wa-message-actions .danger:hover,
+.wa-conversation-menu .danger:hover{
+  background:#fff0f0 !important;
+}
