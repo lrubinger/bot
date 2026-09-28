@@ -1055,6 +1055,20 @@ function ticketMediaHtml(m){
   </div>`;
 }
 
+async function openTicketMediaModal(kind,url,name){
+  if(kind==="image"){
+    modal(`<div class="ticket-media-modal"><img src="${url}" alt="${esc(name||"Imagem")}" /></div>`);
+    return;
+  }
+  if(kind==="video"){
+    modal(`<div class="ticket-media-modal"><video controls autoplay src="${url}"></video></div>`);
+    return;
+  }
+  if(kind==="audio"){
+    modal(`<div class="ticket-media-modal audio"><audio controls autoplay src="${url}"></audio></div>`);
+  }
+}
+
 async function hydrateTicketMedia(container){
   if(!container)return;
   const nodes=[...container.querySelectorAll("[data-media-id]")];
@@ -1088,16 +1102,19 @@ async function hydrateTicketMedia(container){
       const name=node.dataset.mediaName||"arquivo";
 
       if(kind==="image"){
-        node.innerHTML=`<a class="ticket-media-link" href="${url}" target="_blank" rel="noopener"><img class="ticket-media-image" src="${url}" alt="Imagem enviada" /></a>`;
+        node.innerHTML=`<button type="button" class="ticket-media-open" data-open-media="image"><img class="ticket-media-image" src="${url}" alt="Imagem enviada" /></button>`;
+        node.querySelector("[data-open-media]")?.addEventListener("click",()=>openTicketMediaModal("image",url,name));
       }else if(kind==="video"){
-        node.innerHTML=`<video class="ticket-media-video" controls preload="metadata" src="${url}"></video><a class="ticket-file-download" href="${url}" download="${esc(name)}">Baixar vídeo</a>`;
+        node.innerHTML=`<button type="button" class="ticket-media-open video" data-open-media="video"><video class="ticket-media-video" muted preload="metadata" src="${url}"></video><span>▶ Abrir vídeo</span></button>`;
+        node.querySelector("[data-open-media]")?.addEventListener("click",()=>openTicketMediaModal("video",url,name));
       }else if(kind==="audio"){
-        node.innerHTML=`<audio class="ticket-media-audio" controls preload="metadata" src="${url}"></audio><a class="ticket-file-download" href="${url}" download="${esc(name)}">Baixar áudio</a>`;
+        node.innerHTML=`<button type="button" class="ticket-audio-open" data-open-media="audio">🔊 Abrir áudio</button>`;
+        node.querySelector("[data-open-media]")?.addEventListener("click",()=>openTicketMediaModal("audio",url,name));
       }else{
         node.href=url;
         node.download=name;
-        node.target="_blank";
-        node.rel="noopener";
+        node.removeAttribute("target");
+        node.rel="";
       }
     }catch(err){
       if(node.tagName==="A"){
