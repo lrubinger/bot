@@ -18,6 +18,7 @@ import SimpleListService, {
 } from "../services/ContactServices/SimpleListService";
 import ContactCustomField from "../models/ContactCustomField";
 import Ticket from "../models/Ticket";
+import Contact from "../models/Contact";
 import { Op } from "sequelize";
 import CreateTicketService from "../services/TicketServices/CreateTicketService";
 
@@ -224,7 +225,9 @@ export const removeSelected = async (
   const { companyId } = req.user;
   const all = req.body?.all === true;
   const ids = Array.isArray(req.body?.ids)
-    ? req.body.ids.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id))
+    ? req.body.ids
+        .map((id: any) => Number(id))
+        .filter((id: number) => Number.isFinite(id))
     : [];
 
   if (!all && ids.length === 0) {
@@ -236,39 +239,37 @@ export const removeSelected = async (
     where.id = { [Op.in]: ids };
   }
 
-  const contacts = await (await import("../models/Contact")).default.findAll({
-    where,
-    attributes: ["id"]
-  });
+  const before = await Contact.count({ where });
 
-  let deleted = 0;
-  const failed: number[] = [];
+  // Usa exclusão em lote diretamente no banco. As relações de Tickets,
+  // Messages, Schedules e campos personalizados possuem ON DELETE CASCADE,
+  // portanto esta operação remove de fato todos os contatos selecionados,
+  // inclusive aqueles que antes falhavam na exclusão um a um.
+  const deleted = await Contact.destroy({ where });
 
-  for (const contact of contacts) {
-    try {
-      await DeleteContactService(String(contact.id));
-      deleted += 1;
-    } catch (_) {
-      failed.push(contact.id);
-    }
+  const remaining = all
+    ? await Contact.count({ where: { companyId } })
+    : await Contact.count({ where });
+
+  if (remaining > 0) {
+    throw new AppError(
+      `A exclusão não foi concluída. Ainda restam ${remaining} contato(s).`,
+      409
+    );
   }
 
   const io = getIO();
-  contacts.forEach(contact => {
-    if (!failed.includes(contact.id)) {
-      io.emit(`company-${companyId}-contact`, {
-        action: "delete",
-        contactId: contact.id
-      });
-    }
+  io.emit(`company-${companyId}-contact`, {
+    action: "reload"
   });
 
   return res.status(200).json({
     deleted,
-    failed: failed.length,
-    requested: all ? contacts.length : ids.length
+    requested: before,
+    remaining
   });
 };
+
 
 export const remove = async (
   req: Request,
