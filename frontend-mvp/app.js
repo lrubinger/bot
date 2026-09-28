@@ -980,7 +980,9 @@ let ticketsRefreshTimer=null;
 let ticketMessagesRefreshTimer=null;
 let activeTicketId=null;
 let ticketsCache=[];
+let ticketMessagesCache=[];
 let ticketAutoScroll=true;
+let ticketReplyingMessage=null;
 let ticketDetailsCollapsed=localStorage.getItem("pp_ticket_details_collapsed")==="1";
 
 function ticketStatusLabel(status){
@@ -1038,17 +1040,32 @@ function ticketChevronIcon(){
 }
 
 function ticketMediaHtml(m){
-  if(!m?.mediaUrl || !m?.id)return "";
+  if(!m?.id)return "";
   const type=String(m.mediaType||"").toLowerCase();
+  const body=String(m.body||"");
+  const ext=(body.split(".").pop()||"").toLowerCase();
+  const hasFileExt=["pdf","doc","docx","xls","xlsx","ppt","pptx","txt","zip","rar","csv"].includes(ext);
+  const isMediaType=
+    type.includes("image") ||
+    type.includes("video") ||
+    type.includes("audio") ||
+    type.includes("ptt") ||
+    type.includes("sticker") ||
+    type.includes("document") ||
+    type.includes("application");
+
+  if(!m.mediaUrl && !isMediaType && !hasFileExt)return "";
+
   const id=esc(m.id);
-  const name=esc(String(m.body||"arquivo"));
+  const name=esc(body||"arquivo");
   let kind="file";
-  if(type.startsWith("image") || ["image","sticker"].includes(type))kind="image";
-  else if(type.startsWith("video") || type==="video")kind="video";
-  else if(type.startsWith("audio") || type==="audio" || type==="ptt")kind="audio";
+
+  if(type.includes("image") || type.includes("sticker"))kind="image";
+  else if(type.includes("video"))kind="video";
+  else if(type.includes("audio") || type.includes("ptt"))kind="audio";
 
   if(kind==="file"){
-    return `<a class="ticket-file-link" href="#" data-media-id="${id}" data-media-kind="file" data-media-name="${name}">📎 ${name||"Baixar arquivo"}</a>`;
+    return `<a class="ticket-file-link" href="#" data-media-id="${id}" data-media-kind="file" data-media-name="${name}">📎 ${name||"Abrir documento"}</a>`;
   }
 
   return `<div class="ticket-media-slot" data-media-id="${id}" data-media-kind="${kind}" data-media-name="${name}">
@@ -1113,9 +1130,9 @@ async function hydrateTicketMedia(container){
         node.querySelector("[data-open-media]")?.addEventListener("click",()=>openTicketMediaModal("audio",url,name));
       }else{
         node.href=url;
-        node.download=name;
-        node.removeAttribute("target");
-        node.rel="";
+        node.removeAttribute("download");
+        node.target="_blank";
+        node.rel="noopener";
       }
     }catch(err){
       if(node.tagName==="A"){
