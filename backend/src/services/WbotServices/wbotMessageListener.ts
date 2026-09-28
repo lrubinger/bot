@@ -435,20 +435,43 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
     );
     return {
       id: sender,
-      name: msg.pushName
+      name: msg.pushName,
+      aliases: []
     };
   }
 
-  const phoneJid =
+  const aliases = [remoteJid, remoteJidAlt]
+    .filter(Boolean)
+    .map(jid => String(jid).replace(/\D/g, ""))
+    .filter(Boolean);
+
+  let phoneJid =
     (remoteJidAlt.endsWith("@s.whatsapp.net") && remoteJidAlt) ||
     (remoteJid.endsWith("@s.whatsapp.net") && remoteJid) ||
-    remoteJid;
+    "";
+
+  if (!phoneJid && remoteJid.endsWith("@lid")) {
+    try {
+      const mapped = await (wbot as any).signalRepository?.lidMapping?.getPNForLID(remoteJid);
+      if (mapped) phoneJid = String(mapped);
+    } catch (_) {}
+  }
+
+  if (!phoneJid && remoteJidAlt.endsWith("@lid")) {
+    try {
+      const mapped = await (wbot as any).signalRepository?.lidMapping?.getPNForLID(remoteJidAlt);
+      if (mapped) phoneJid = String(mapped);
+    } catch (_) {}
+  }
+
+  if (!phoneJid) phoneJid = remoteJidAlt || remoteJid;
 
   const rawNumber = phoneJid.replace(/\D/g, "");
 
   return {
     id: phoneJid,
-    name: msg.key.fromMe ? rawNumber : msg.pushName
+    name: msg.key.fromMe ? rawNumber : msg.pushName,
+    aliases: Array.from(new Set(aliases.filter(value => value !== rawNumber)))
   };
 };
 
@@ -502,7 +525,7 @@ const downloadMedia = async (msg: proto.IWebMessageInfo) => {
 
 
 const verifyContact = async (
-  msgContact: IMe,
+  msgContact: IMe & { aliases?: string[] },
   wbot: Session,
   companyId: number
 ): Promise<Contact> => {
@@ -520,7 +543,8 @@ const verifyContact = async (
     profilePicUrl,
     isGroup: msgContact.id.includes("g.us"),
     companyId,
-    whatsappId: wbot.id
+    whatsappId: wbot.id,
+    aliases: msgContact.aliases || []
   };
 
 
