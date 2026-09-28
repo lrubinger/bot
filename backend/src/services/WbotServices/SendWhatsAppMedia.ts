@@ -191,6 +191,15 @@ const SendWhatsAppMedia = async ({
       );
     }
 
+    const contactDigits = String(ticket.contact?.number || "").replace(/\D/g, "");
+    const defaultRecipientIsSafe =
+      ticket.isGroup ||
+      (contactDigits.length >= 10 && contactDigits.length <= 13);
+
+    // Prioriza o JID real da conversa armazenado nas mensagens. Antes o envio
+    // tentava primeiro o telefone salvo no contato; quando esse campo continha
+    // um LID convertido em número, o Baileys podia aceitar o envio localmente
+    // sem entregar ao contato correto.
     const recipients = ticket.isGroup
       ? [defaultRecipient]
       : selfChat && wbot.user?.id
@@ -200,9 +209,9 @@ const SendWhatsAppMedia = async ({
             wbot.user.id
           ].filter(Boolean))) as string[]
         : Array.from(new Set([
+            resolvedChatJid,
             resolvedPhoneJid,
-            defaultRecipient,
-            resolvedChatJid
+            defaultRecipientIsSafe ? defaultRecipient : undefined
           ].filter(Boolean))) as string[];
 
     let sentMessage: WAMessage | undefined;
