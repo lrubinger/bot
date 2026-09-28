@@ -21,6 +21,8 @@ import Ticket from "../models/Ticket";
 import Contact from "../models/Contact";
 import { Op } from "sequelize";
 import CreateTicketService from "../services/TicketServices/CreateTicketService";
+import FindOrCreateTicketService from "../services/TicketServices/FindOrCreateTicketService";
+import GetDefaultWhatsApp from "../helpers/GetDefaultWhatsApp";
 
 type IndexQuery = {
   searchParam: string;
@@ -187,36 +189,64 @@ export const startConversation = async (
   const { contactId } = req.params;
   const { companyId, id: userId } = req.user;
 
-  await ShowContactService(contactId, companyId);
+  const contact = await ShowContactService(contactId, companyId);
 
-  let ticket = await Ticket.findOne({
-    where: {
-      contactId: +contactId,
-      companyId,
-      status: { [Op.in]: ["open", "pending"] }
-    },
-    order: [["updatedAt", "DESC"]]
+  if (contact.isGroup) {
+    throw new AppError("Não é possível iniciar uma conversa individual com um grupo.", 400);
+  }
+
+  const whatsapp = await GetDefaultWhatsApp(companyId, +userId);
+
+  // Valida e normaliza o número no momento em que a conversa é iniciada.
+  // Isso evita criar um atendimento com um telefone importado em formato
+  // diferente do JID real usado pelo WhatsApp.
+  const digits = String(contact.number || "").replace(/\D/g, "");
+  if (!digits) {
+    throw new AppError("Este contato não possui telefone válido.", 400);
+  }
+
+  try {
+    const validNumber = await CheckContactNumber(digits, companyId);
+    const normalized = String(validNumber?.jid || "").replace(/\D/g, "");
+    if (normalized && normalized !== digits) {
+      await contact.update({ number: normalized });
+    }
+  } catch (error: any) {
+    throw new AppError(
+      error?.message === "ERR_CHECK_NUMBER"
+        ? "Este telefone não foi encontrado no WhatsApp."
+        : "Não foi possível validar o telefone deste contato no WhatsApp.",
+      400
+    );
+  }
+
+  const ticket = await FindOrCreateTicketService(
+    contact,
+    whatsapp.id,
+    0,
+    companyId
+  );
+
+  await ticket.update({
+    status: "open",
+    userId: +userId,
+    whatsappId: whatsapp.id,
+    archived: false
   });
 
-  if (!ticket) {
-    ticket = await CreateTicketService({
-      contactId: +contactId,
-      status: "open",
-      userId: +userId,
-      companyId
-    });
-  } else if (ticket.status !== "open" || ticket.userId !== +userId) {
-    await ticket.update({
-      status: "open",
-      userId: +userId
-    });
-  }
+  const io = getIO();
+  io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-ticket`, {
+    action: "update",
+    ticket
+  });
 
   return res.status(200).json({
     ticketId: ticket.id,
-    contactId: +contactId
+    contactId: contact.id,
+    whatsappId: whatsapp.id
   });
 };
+
 
 export const removeSelected = async (
   req: Request,
