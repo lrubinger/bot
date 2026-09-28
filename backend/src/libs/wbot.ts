@@ -62,7 +62,10 @@ export const removeWbot = async (
   }
 };
 
-export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
+export const initWASocket = async (
+  whatsapp: Whatsapp,
+  onSocketCreated?: (socket: Session) => void | Promise<void>
+): Promise<Session> => {
   return new Promise(async (resolve, reject) => {
     try {
       (async () => {
@@ -126,6 +129,19 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             }
           }
         });
+
+        // Registra a sessão e os listeners de mensagens antes da abertura
+        // da conexão. O WhatsApp pode emitir "messaging-history.set" logo no
+        // primeiro instante após conectar; se o listener for adicionado somente
+        // depois do "open", parte da sincronização inicial é perdida.
+        wsocket.id = whatsapp.id;
+        if (!sessions.some(session => session.id === whatsapp.id)) {
+          sessions.push(wsocket);
+        }
+
+        if (onSocketCreated) {
+          await onSocketCreated(wsocket);
+        }
 
         // wsocket = makeWASocket({
         //   version,
