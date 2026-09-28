@@ -11,6 +11,7 @@ import Tag from "../../models/Tag";
 import TicketTag from "../../models/TicketTag";
 import { intersection } from "lodash";
 import Whatsapp from "../../models/Whatsapp";
+import ResolveTicketAddress from "../../helpers/ResolveTicketAddress";
 
 interface Request {
   searchParam?: string;
@@ -230,6 +231,19 @@ const ListTicketsService = async ({
   });
 
   const hasMore = count > offset + tickets.length;
+
+  await Promise.all(
+    tickets.map(async ticket => {
+      if (ticket.isGroup) return;
+      const resolved = await ResolveTicketAddress(ticket.id);
+      if (resolved.number) {
+        (ticket as any).setDataValue("resolvedNumber", resolved.number);
+      }
+      if (resolved.chatJid) {
+        (ticket as any).setDataValue("resolvedJid", resolved.chatJid);
+      }
+    })
+  );
 
   return {
     tickets,
