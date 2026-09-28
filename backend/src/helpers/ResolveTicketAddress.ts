@@ -40,17 +40,15 @@ export default async function ResolveTicketAddress(
 
       const rawRemote = String(key.remoteJid || "");
       const rawRemoteAlt = String(key.remoteJidAlt || "");
-      const rawParticipant = String(key.participant || "");
-      const rawParticipantAlt = String(key.participantAlt || "");
-
+      // Para conversas individuais, o destinatário deve ser resolvido apenas
+      // pelos JIDs remotos. participant/participantAlt podem representar a
+      // própria sessão e faziam o Baileys aceitar o envio para o contato errado.
       if (!chatJid) {
-        chatJid =
-          [rawRemote, rawRemoteAlt, rawParticipant, rawParticipantAlt].find(isChatJid);
+        chatJid = [rawRemote, rawRemoteAlt].find(isChatJid);
       }
 
       if (!phoneJid) {
-        phoneJid =
-          [rawRemoteAlt, rawParticipantAlt, rawRemote, rawParticipant].find(isPhoneJid);
+        phoneJid = [rawRemoteAlt, rawRemote].find(isPhoneJid);
       }
 
       if (chatJid && phoneJid) break;
