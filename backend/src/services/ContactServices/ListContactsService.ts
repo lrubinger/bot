@@ -1,5 +1,6 @@
 import { Sequelize, Op } from "sequelize";
 import Contact from "../../models/Contact";
+import ContactCustomField from "../../models/ContactCustomField";
 
 interface Request {
   searchParam?: string;
@@ -18,17 +19,45 @@ const ListContactsService = async ({
   pageNumber = "1",
   companyId
 }: Request): Promise<Response> => {
-  const whereCondition = {
-    [Op.or]: [
-      {
-        name: Sequelize.where(
-          Sequelize.fn("LOWER", Sequelize.col("name")),
-          "LIKE",
-          `%${searchParam.toLowerCase().trim()}%`
-        )
+  const normalizedSearch = searchParam.toLowerCase().trim();
+  let companyContactIds: number[] = [];
+
+  if (normalizedSearch) {
+    const companyFields = await ContactCustomField.findAll({
+      where: {
+        name: "Empresa",
+        value: { [Op.iLike]: `%${normalizedSearch}%` }
       },
-      { number: { [Op.like]: `%${searchParam.toLowerCase().trim()}%` } }
-    ],
+      attributes: ["contactId"]
+    });
+
+    companyContactIds = companyFields.map(field => field.contactId);
+  }
+
+  const searchConditions: any[] = [
+    {
+      name: Sequelize.where(
+        Sequelize.fn("LOWER", Sequelize.col("name")),
+        "LIKE",
+        `%${normalizedSearch}%`
+      )
+    },
+    { number: { [Op.like]: `%${normalizedSearch}%` } },
+    {
+      email: Sequelize.where(
+        Sequelize.fn("LOWER", Sequelize.col("email")),
+        "LIKE",
+        `%${normalizedSearch}%`
+      )
+    }
+  ];
+
+  if (companyContactIds.length) {
+    searchConditions.push({ id: { [Op.in]: companyContactIds } });
+  }
+
+  const whereCondition = {
+    [Op.or]: searchConditions,
     companyId: {
       [Op.eq]: companyId
     }
