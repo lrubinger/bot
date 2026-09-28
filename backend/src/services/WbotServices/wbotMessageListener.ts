@@ -1763,8 +1763,7 @@ const findExistingTicketByConversationJid = async (
   // Alguns registros antigos só preservaram o identificador alternativo
   // dentro do dataJson. Procura por ele como fallback.
   for (const jid of candidates) {
-    const escaped = jid.replace(/[%_]/g, "\\const handleMessage = async (
-  msg: proto.IWebMessageInfo,");
+    const escaped = jid;
     const historical = await Message.findOne({
       where: {
         companyId,
