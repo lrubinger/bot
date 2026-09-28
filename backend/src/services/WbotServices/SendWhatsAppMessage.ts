@@ -8,6 +8,7 @@ import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 
 import formatBody from "../../helpers/Mustache";
+import { logger } from "../../utils/logger";
 
 interface Request {
   body: string;
@@ -88,6 +89,10 @@ const SendWhatsAppMessage = async ({
     let sentMessage: WAMessage | undefined;
     let lastError: any;
 
+    logger.info(
+      `Envio WhatsApp ticket=${ticket.id} contact=${ticket.contact?.id} recipients=${recipients.join(",")}`
+    );
+
     for (const recipient of recipients) {
       try {
         const normalizedRecipient = recipient.endsWith("@lid")
@@ -98,7 +103,12 @@ const SendWhatsAppMessage = async ({
           { text: formatBody(body, ticket.contact) },
           { ...options }
         );
-        if (sentMessage) break;
+        if (sentMessage) {
+          logger.info(
+            `Envio WhatsApp aceito ticket=${ticket.id} recipient=${normalizedRecipient} messageId=${sentMessage.key?.id || ""}`
+          );
+          break;
+        }
       } catch (sendError) {
         lastError = sendError;
       }
