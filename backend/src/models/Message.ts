@@ -66,6 +66,13 @@ class Message extends Model<Message> {
   @Column
   isDeleted: boolean;
 
+  @Default(false)
+  @Column
+  pending: boolean;
+
+  @Column(DataType.STRING)
+  reaction: string;
+
   @CreatedAt
   @Column(DataType.DATE(6))
   createdAt: Date;
