@@ -630,8 +630,10 @@ async function contacts(){
         })
       });
 
-      if(result.failed){
-        alert(`${result.deleted||0} contato(s) excluído(s). ${result.failed} não puderam ser excluídos.`);
+      if(Number(result.remaining||0)>0){
+        alert(`A exclusão não foi concluída. Ainda restam ${result.remaining} contato(s).`);
+      }else{
+        alert(`${result.deleted||0} contato(s) excluído(s). Nenhum contato restante.`);
       }
       await contacts();
     }catch(err){
