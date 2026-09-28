@@ -2307,11 +2307,6 @@ const handleHistoryMessage = async (
 ): Promise<void> => {
   if (!msg?.key?.id || !msg?.key?.remoteJid || !isValidMsg(msg)) return;
 
-  const exists = await Message.count({
-    where: { id: msg.key.id, companyId }
-  });
-  if (exists) return;
-
   try {
     const isGroup = msg.key.remoteJid.endsWith("@g.us");
     let groupContact: Contact | undefined;
@@ -2342,6 +2337,21 @@ const handleHistoryMessage = async (
       companyId,
       groupContact
     );
+
+    const existingMessage = await Message.findOne({
+      where: { id: msg.key.id, companyId }
+    });
+
+    if (existingMessage) {
+      await existingMessage.update({
+        contactId: msg.key.fromMe ? existingMessage.contactId : contact.id,
+        ticketId: ticket.id,
+        remoteJid: msg.key.remoteJid,
+        participant: msg.key.participant,
+        dataJson: JSON.stringify(msg)
+      });
+      return;
+    }
 
     const timestampSeconds = Number(msg.messageTimestamp || 0);
     const createdAt = timestampSeconds > 0
