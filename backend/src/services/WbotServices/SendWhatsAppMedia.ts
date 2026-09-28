@@ -54,12 +54,13 @@ export const getMessageOptions = async (
   body?: string
 ): Promise<any> => {
   const mimeType = mime.lookup(pathMedia);
-  const typeMessage = mimeType.split("/")[0];
 
   try {
     if (!mimeType) {
       throw new Error("Invalid mimetype");
     }
+
+    const typeMessage = mimeType.split("/")[0];
     let options: AnyMessageContent;
 
     if (typeMessage === "video") {
