@@ -22,16 +22,15 @@ const SendWhatsAppMessage = async ({
 }: Request): Promise<WAMessage> => {
   let options = {};
   const wbot = await GetTicketWbot(ticket);
-  let number = `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
-
-  if (!ticket.isGroup) {
-    const resolved = await ResolveTicketAddress(ticket.id);
-    if (resolved.chatJid) {
-      number = resolved.chatJid;
-    } else if (resolved.phoneJid) {
-      number = resolved.phoneJid;
-    }
-  }
+  const defaultRecipient = `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
+  const resolved = ticket.isGroup ? {} : await ResolveTicketAddress(ticket.id);
+  const recipients = ticket.isGroup
+    ? [defaultRecipient]
+    : Array.from(new Set([
+        resolved.chatJid,
+        resolved.phoneJid,
+        defaultRecipient
+      ].filter(Boolean))) as string[];
 
   if (quotedMsg) {
       const chatMessages = await Message.findOne({
@@ -56,13 +55,26 @@ const SendWhatsAppMessage = async ({
   }
 
   try {
-    const sentMessage = await wbot.sendMessage(number,{
-        text: formatBody(body, ticket.contact)
-      },
-      {
-        ...options
+    let sentMessage: WAMessage | undefined;
+    let lastError: any;
+
+    for (const recipient of recipients) {
+      try {
+        sentMessage = await wbot.sendMessage(
+          recipient,
+          { text: formatBody(body, ticket.contact) },
+          { ...options }
+        );
+        if (sentMessage) break;
+      } catch (sendError) {
+        lastError = sendError;
       }
-    );
+    }
+
+    if (!sentMessage) {
+      throw lastError || new Error("WhatsApp não retornou confirmação do envio.");
+    }
+
     await ticket.update({ lastMessage: formatBody(body, ticket.contact) });
     return sentMessage;
   } catch (err: any) {
