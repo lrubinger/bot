@@ -17,6 +17,8 @@ ticketRoutes.post("/tickets", isAuth, TicketController.store);
 
 ticketRoutes.put("/tickets/:ticketId", isAuth, TicketController.update);
 
+ticketRoutes.post("/tickets/:ticketId/pin", isAuth, TicketController.pin);
+ticketRoutes.post("/tickets/:ticketId/unpin", isAuth, TicketController.unpin);
 ticketRoutes.post("/tickets/:ticketId/mark-unread", isAuth, TicketController.markUnread);
 ticketRoutes.post("/tickets/:ticketId/archive", isAuth, TicketController.archive);
 ticketRoutes.post("/tickets/:ticketId/unarchive", isAuth, TicketController.unarchive);
