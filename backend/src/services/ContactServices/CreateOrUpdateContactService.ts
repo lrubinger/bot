@@ -41,13 +41,27 @@ const CreateOrUpdateContactService = async ({
   });
 
   if (contact) {
-    contact.update({ profilePicUrl });
-    console.log(contact.whatsappId)
-    if (isNil(contact.whatsappId === null)) {
-      contact.update({
-        whatsappId
-      });
+    const currentName = String(contact.name || "").trim();
+    const incomingName = String(name || "").trim();
+    const currentLooksTechnical =
+      !currentName ||
+      currentName.includes("@g.us") ||
+      currentName.includes("@lid") ||
+      /^\d+$/.test(currentName) ||
+      /^\d+-\d+$/.test(currentName);
+
+    const updateData: any = { profilePicUrl };
+
+    if (incomingName && (currentLooksTechnical || incomingName !== number)) {
+      updateData.name = incomingName;
     }
+
+    if (isNil(contact.whatsappId) && whatsappId) {
+      updateData.whatsappId = whatsappId;
+    }
+
+    await contact.update(updateData);
+
     io.to(`company-${companyId}-mainchannel`).emit(`company-${companyId}-contact`, {
       action: "update",
       contact
