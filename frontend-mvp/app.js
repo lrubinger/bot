@@ -1145,20 +1145,53 @@ async function hydrateTicketMedia(container){
   }));
 }
 
+function messageMenuChevron(){
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9 5 5 5-5"/></svg>';
+}
+
+function messagePreviewText(message){
+  const body=String(message?.body||"").trim();
+  if(body)return body;
+  const type=String(message?.mediaType||"").toLowerCase();
+  if(type.includes("image"))return "Imagem";
+  if(type.includes("video"))return "Vídeo";
+  if(type.includes("audio")||type.includes("ptt"))return "Áudio";
+  if(type.includes("document")||type.includes("application"))return "Documento";
+  return "Mensagem";
+}
+
 function renderTicketMessages(messages){
   return (messages||[]).map(m=>{
     const body=String(m.body||"");
     const media=ticketMediaHtml(m);
     const when=ticketTime(m.createdAt);
-    return `<div class="wa-message-row ${m.fromMe?"me":""}">
-      <div class="wa-message ${m.fromMe?"me":""}">
-        ${media}
-        ${body?`<div class="wa-message-body">${esc(body)}</div>`:""}
-        <div class="wa-message-meta">${when}${m.fromMe?" ✓✓":""}</div>
+    const pending=m.pending===true;
+    const reaction=String(m.reaction||"");
+    const quick=["👍","❤️","😂","😮","😢","🙏"];
+    return `<div class="wa-message-row ${m.fromMe?"me":""}" data-message-row="${esc(m.id)}">
+      <div class="wa-message-wrap">
+        <button type="button" class="wa-message-menu-trigger" data-message-menu-trigger="${esc(m.id)}" aria-label="Opções da mensagem">${messageMenuChevron()}</button>
+        <div class="wa-message ${m.fromMe?"me":""}">
+          ${media}
+          ${body?`<div class="wa-message-body">${esc(body)}</div>`:""}
+          ${reaction?`<div class="wa-message-reaction">${esc(reaction)}</div>`:""}
+          ${pending?'<div class="wa-message-pending-badge">Pendente</div>':""}
+          <div class="wa-message-meta">${when}${m.fromMe?" ✓✓":""}</div>
+        </div>
+        <div class="wa-message-actions hidden" data-message-menu="${esc(m.id)}">
+          <div class="wa-message-reactions">
+            ${quick.map(emoji=>`<button type="button" data-message-react="${esc(m.id)}" data-emoji="${emoji}">${emoji}</button>`).join("")}
+            <button type="button" class="wa-message-reaction-more" data-message-reaction-more="${esc(m.id)}">＋</button>
+          </div>
+          <button type="button" data-message-action="reply" data-id="${esc(m.id)}">↩ Responder</button>
+          <button type="button" data-message-action="forward" data-id="${esc(m.id)}">↪ Encaminhar</button>
+          <button type="button" data-message-action="pending" data-id="${esc(m.id)}">${pending?"✓ Remover pendência":"⚑ Pendente"}</button>
+        </div>
       </div>
     </div>`;
   }).join("");
 }
+
 
 function renderTicketList(list){
   return (list||[]).length ? list.map(t=>{
