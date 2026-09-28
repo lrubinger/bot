@@ -493,13 +493,22 @@ async function showQr(id){
 
   setTimeout(poll,350);
 }
-async function contacts(){
+async function contacts(pageNumber=1, searchParam=""){
   setTitle("Contatos");
-  const data=await api("/contacts?pageNumber=1&searchParam=");
+  const page=Math.max(1,Number(pageNumber)||1);
+  const search=String(searchParam||"");
+  const data=await api("/contacts?pageNumber="+page+"&searchParam="+encodeURIComponent(search));
   const list=data.contacts||[];
+  const total=Number(data.count||0);
+  const pageSize=30;
+  const totalPages=Math.max(1,Math.ceil(total/pageSize));
 
   content(`
     <div class="toolbar contacts-toolbar-actions">
+      <div class="contacts-search-wrap">
+        <input id="contactsSearchInput" type="search" placeholder="Pesquisar por nome, empresa, e-mail ou telefone" value="${esc(search)}" />
+        <span class="contacts-total">${total} contato${total===1?"":"s"}</span>
+      </div>
       <button class="primary" id="newContactBtn" type="button">Novo Contato</button>
       <button class="ghost google-contacts-btn" id="importGoogleContactsBtn" type="button">
         <span class="google-g" aria-hidden="true">G</span>
@@ -570,7 +579,33 @@ async function contacts(){
         </tbody>
       </table>
     </div>
+    <div class="contacts-pagination">
+      <button class="ghost" id="contactsPrevPage" type="button" ${page<=1?"disabled":""}>Anterior</button>
+      <div class="contacts-page-numbers">
+        ${Array.from({length:totalPages},(_,i)=>i+1)
+          .filter(p=>p===1||p===totalPages||Math.abs(p-page)<=2)
+          .map((p,idx,arr)=>{
+            const prev=arr[idx-1];
+            const gap=prev && p-prev>1?'<span class="contacts-page-gap">…</span>':"";
+            return gap+`<button class="contacts-page-btn ${p===page?"active":""}" data-page="${p}" type="button">${p}</button>`;
+          }).join("")}
+      </div>
+      <button class="ghost" id="contactsNextPage" type="button" ${page>=totalPages?"disabled":""}>Próxima</button>
+      <span class="small">Página ${page} de ${totalPages}</span>
+    </div>
   `);
+
+  let searchTimer=null;
+  $("#contactsSearchInput")?.addEventListener("input",e=>{
+    clearTimeout(searchTimer);
+    searchTimer=setTimeout(()=>contacts(1,e.target.value),350);
+  });
+
+  $("#contactsPrevPage")?.addEventListener("click",()=>contacts(page-1,search));
+  $("#contactsNextPage")?.addEventListener("click",()=>contacts(page+1,search));
+  document.querySelectorAll(".contacts-page-btn").forEach(btn=>{
+    btn.addEventListener("click",()=>contacts(Number(btn.dataset.page),search));
+  });
 
   const findContact=id=>list.find(item=>String(item.id)===String(id));
 
