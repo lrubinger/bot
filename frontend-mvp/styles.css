@@ -2273,3 +2273,50 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
 .wa-conversation-menu .danger:hover{
   background:#fff0f0 !important;
 }
+
+
+/* Conversation action visibility fix */
+.wa-conversation-main{
+  min-width:0;
+}
+.wa-conversation-top{
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:start;
+  gap:8px;
+}
+.wa-conversation-top>b{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.wa-conversation-meta{
+  min-width:32px;
+  flex:0 0 auto;
+  position:relative;
+  z-index:3;
+}
+.wa-conversation-controls{
+  min-width:22px;
+  min-height:18px;
+  display:flex !important;
+  visibility:visible !important;
+  opacity:1 !important;
+}
+.wa-conversation-menu-btn{
+  display:grid !important;
+  visibility:visible !important;
+  opacity:1 !important;
+  pointer-events:auto !important;
+  flex:0 0 auto;
+}
+.wa-conversation-bottom{
+  min-width:0;
+}
+.wa-conversation-bottom>span:first-child{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
