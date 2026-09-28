@@ -21,9 +21,39 @@ const SendWhatsAppMessage = async ({
 }: Request): Promise<WAMessage> => {
   let options = {};
   const wbot = await GetTicketWbot(ticket);
-  const number = `${ticket.contact.number}@${
-    ticket.isGroup ? "g.us" : "s.whatsapp.net"
-  }`;
+  let number = `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
+
+  if (!ticket.isGroup) {
+    const lastMessage = await Message.findOne({
+      where: { ticketId: ticket.id },
+      order: [["createdAt", "DESC"]]
+    });
+
+    if (lastMessage?.dataJson) {
+      try {
+        const raw = JSON.parse(lastMessage.dataJson);
+        const key: any = raw?.key || {};
+        const candidates = [
+          key.remoteJidAlt,
+          key.remoteJid,
+          key.participantAlt,
+          key.participant
+        ].filter(Boolean);
+
+        const phoneJid = candidates.find((jid: string) =>
+          String(jid).endsWith("@s.whatsapp.net")
+        );
+
+        if (phoneJid) number = phoneJid;
+      } catch (_) {}
+    }
+
+    if (!String(number).endsWith("@s.whatsapp.net")) {
+      const normalized = String(ticket.contact.number || "").replace(/\D/g, "");
+      number = `${normalized}@s.whatsapp.net`;
+    }
+  }
+
   if (quotedMsg) {
       const chatMessages = await Message.findOne({
         where: {
