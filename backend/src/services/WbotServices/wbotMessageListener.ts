@@ -453,18 +453,22 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
   if (!phoneJid && remoteJid.endsWith("@lid")) {
     try {
       const mapped = await (wbot as any).signalRepository?.lidMapping?.getPNForLID(remoteJid);
-      if (mapped) phoneJid = String(mapped);
+      if (mapped) phoneJid = jidNormalizedUser(String(mapped));
     } catch (_) {}
   }
 
   if (!phoneJid && remoteJidAlt.endsWith("@lid")) {
     try {
       const mapped = await (wbot as any).signalRepository?.lidMapping?.getPNForLID(remoteJidAlt);
-      if (mapped) phoneJid = String(mapped);
+      if (mapped) phoneJid = jidNormalizedUser(String(mapped));
     } catch (_) {}
   }
 
   if (!phoneJid) phoneJid = remoteJidAlt || remoteJid;
+
+  if (phoneJid.endsWith("@s.whatsapp.net") && !remoteJidAlt.endsWith("@s.whatsapp.net")) {
+    key.remoteJidAlt = phoneJid;
+  }
 
   const rawNumber = phoneJid.replace(/\D/g, "");
 
