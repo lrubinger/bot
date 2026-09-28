@@ -1132,6 +1132,11 @@ function ticketContactName(ticket){
   return company?`${name} | ${company}`:name;
 }
 
+function canDeleteWhatsAppData(){
+  const email=String(state.user?.email||"").trim().toLowerCase();
+  return email==="lucas.rubinger@gmail.com" || email==="financeiro@portoplan.com.br";
+}
+
 function ticketPinIcon(){
   return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l-1 6 4 4v2H6v-2l4-4-1-6Z"/><path d="M12 15v6"/></svg>';
 }
@@ -1288,6 +1293,7 @@ function renderTicketMessages(messages){
           <button type="button" data-message-action="reply" data-id="${esc(m.id)}">↩ Responder</button>
           <button type="button" data-message-action="forward" data-id="${esc(m.id)}">↪ Encaminhar</button>
           <button type="button" data-message-action="pending" data-id="${esc(m.id)}">${pending?"✓ Remover pendência":"⚑ Pendente"}</button>
+          ${canDeleteWhatsAppData() && m.fromMe?`<button type="button" class="danger" data-message-action="delete" data-id="${esc(m.id)}">Excluir mensagem</button>`:""}
         </div>
       </div>
     </div>`;
@@ -1324,6 +1330,7 @@ function renderTicketList(list){
         ${!contact.isGroup?`<button type="button" data-ticket-action="contact" data-id="${t.id}">Cadastrar contato</button>`:""}
         <button type="button" data-ticket-action="${pinned?"unpin":"pin"}" data-id="${t.id}">${pinned?"Desafixar conversa":"Fixar conversa"}</button>
         <button type="button" data-ticket-action="${archived?"unarchive":"archive"}" data-id="${t.id}">${archived?"Desarquivar":"Arquivar"}</button>
+        ${canDeleteWhatsAppData()?`<button type="button" class="danger" data-ticket-action="delete" data-id="${t.id}">Excluir conversa</button>`:""}
       </div>
     </div>`;
   }).join("") : '<div class="wa-empty-list">Nenhuma conversa encontrada.</div>';
@@ -1469,6 +1476,21 @@ function bindTicketList(){
           }
         }else if(action==="unarchive"){
           await api("/tickets/"+id+"/unarchive",{method:"POST",body:"{}"});
+        }else if(action==="delete"){
+          closeTicketMenus();
+          const ok=confirm("Excluir toda esta conversa? O PortoPlan tentará remover para todos as mensagens enviadas que o WhatsApp ainda permitir. Mensagens recebidas não podem ser apagadas do aparelho do outro contato. Deseja continuar?");
+          if(!ok)return;
+          const result=await api("/tickets/"+id,{method:"DELETE"});
+          if(String(activeTicketId)===String(id)){
+            activeTicketId=null;
+            const chat=$("#ticketChatPanel");
+            if(chat)chat.innerHTML='<div class="wa-chat-empty"><div class="wa-chat-empty-icon">💬</div><b>Atendimentos</b><span>Selecione uma conversa para visualizar as mensagens.</span></div>';
+            const details=$("#ticketContactContent");
+            if(details)details.innerHTML='<div class="wa-contact-empty">As informações do contato aparecerão aqui.</div>';
+          }
+          if(result?.revokeFailed){
+            alert("Conversa removida do PortoPlan. Algumas mensagens antigas não puderam ser apagadas para todos pelo WhatsApp.");
+          }
         }
         closeTicketMenus();
         ticketsCache=await fetchTicketList($("#ticketStatusFilter")?.value==="archived");
@@ -1743,7 +1765,26 @@ function closeMessageMenus(){
   document.querySelectorAll(".wa-message-actions").forEach(menu=>menu.classList.add("hidden"));
 }
 
+function bindMessageMenuHoverDelay(){
+  document.querySelectorAll(".wa-message-wrap").forEach(wrap=>{
+    let timer=null;
+    wrap.addEventListener("mouseenter",()=>{
+      if(timer)clearTimeout(timer);
+      wrap.classList.add("menu-hover-hold");
+    });
+    wrap.addEventListener("mouseleave",()=>{
+      if(timer)clearTimeout(timer);
+      timer=setTimeout(()=>{
+        if(!wrap.querySelector(".wa-message-actions:not(.hidden)")){
+          wrap.classList.remove("menu-hover-hold");
+        }
+      },3000);
+    });
+  });
+}
+
 function bindTicketMessageActions(ticketId){
+  bindMessageMenuHoverDelay();
   document.querySelectorAll("[data-message-menu-trigger]").forEach(btn=>{
     btn.onclick=e=>{
       e.stopPropagation();
@@ -1815,6 +1856,18 @@ function bindTicketMessageActions(ticketId){
         await loadTicketPending(ticketId);
       }catch(err){
         alert(err.message||"Não foi possível atualizar a pendência.");
+      }
+      return;
+    }
+
+    if(action==="delete"){
+      closeMessageMenus();
+      if(!confirm("Excluir esta mensagem para todos? Essa ação não pode ser desfeita e depende das regras de exclusão do WhatsApp."))return;
+      try{
+        await api("/messages/"+id,{method:"DELETE"});
+        await refreshOpenTicket(ticketId);
+      }catch(err){
+        alert(err.message||"Não foi possível excluir a mensagem.");
       }
     }
   });
