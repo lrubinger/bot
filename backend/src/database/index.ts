@@ -39,6 +39,7 @@ import Prompt from "../models/Prompt";
 import QueueIntegrations from "../models/QueueIntegrations";
 import InternalChatMessage from "../models/InternalChatMessage";
 import CompanyKanban from "../models/CompanyKanban";
+import ContactJid from "../models/ContactJid";
 
 // eslint-disable-next-line
 const dbConfig = require("../config/database");
@@ -87,6 +88,7 @@ const models = [
   QueueIntegrations,
   InternalChatMessage,
   CompanyKanban,
+  ContactJid,
 ];
 
 sequelize.addModels(models);
