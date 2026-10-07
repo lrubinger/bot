@@ -3,7 +3,6 @@ import { getIO } from "../libs/socket";
 import Ticket from "../models/Ticket";
 import Message from "../models/Message";
 import User from "../models/User";
-import DeleteWhatsAppMessage from "../services/WbotServices/DeleteWhatsAppMessage";
 import AppError from "../errors/AppError";
 
 import CreateTicketService from "../services/TicketServices/CreateTicketService";
