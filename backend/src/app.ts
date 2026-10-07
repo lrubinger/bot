@@ -32,6 +32,11 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(Sentry.Handlers.requestHandler());
 app.use("/public", express.static(uploadConfig.directory));
+
+app.get("/health", (_req: Request, res: Response) => {
+  return res.status(200).json({ status: "ok" });
+});
+
 app.use(routes);
 
 app.use(Sentry.Handlers.errorHandler());
