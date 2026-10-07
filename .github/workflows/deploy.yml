@@ -89,11 +89,26 @@ jobs:
 
           nohup node "$APP_DIR/backend/dist/server.js" > "$APP_DIR/backend-mvp.log" 2>&1 &
           BACKEND_PID=$!
-          sleep 3
 
-          if ! kill -0 "$BACKEND_PID" >/dev/null 2>&1; then
-            echo "Backend novo encerrou logo apos iniciar."
-            tail -n 80 "$APP_DIR/backend-mvp.log" || true
+          BACKEND_READY=0
+          for i in $(seq 1 20); do
+            if ! kill -0 "$BACKEND_PID" >/dev/null 2>&1; then
+              echo "BACKEND_START_FAILED"
+              tail -n 160 "$APP_DIR/backend-mvp.log" || true
+              exit 1
+            fi
+
+            if curl -fsS --max-time 3 http://127.0.0.1:4000/ >/dev/null 2>&1; then
+              BACKEND_READY=1
+              break
+            fi
+
+            sleep 1
+          done
+
+          if [ "$BACKEND_READY" -ne 1 ]; then
+            echo "BACKEND_HTTP_FAILED"
+            tail -n 160 "$APP_DIR/backend-mvp.log" || true
             exit 1
           fi
 
@@ -107,8 +122,8 @@ jobs:
           nginx -t
           systemctl reload nginx
 
-          curl -fsS http://127.0.0.1:4000/ >/dev/null || true
-          curl -fsS https://bot.portoplan.com.br/ >/dev/null
+          curl -fsS --max-time 5 http://127.0.0.1:4000/ >/dev/null
+          curl -fsS --max-time 10 https://bot.portoplan.com.br/ >/dev/null
 
           echo "DEPLOY_OK"
           REMOTE
