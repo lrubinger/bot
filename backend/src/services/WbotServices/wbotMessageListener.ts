@@ -1725,6 +1725,35 @@ export const handleMessageIntegration = async (
   }
 }
 
+const findExistingTicketByResolvedNumber = async (
+  msgContact: IMe & { aliases?: string[] },
+  whatsappId: number,
+  companyId: number
+): Promise<{ ticket: Ticket; contact: Contact } | null> => {
+  const number = String(msgContact?.id || "").replace(/\D/g, "");
+  if (!number || number.length < 10 || number.length > 13) return null;
+
+  const contact = await Contact.findOne({
+    where: { companyId, number }
+  });
+
+  if (!contact) return null;
+
+  const ticket = await Ticket.findOne({
+    where: {
+      contactId: contact.id,
+      companyId,
+      whatsappId,
+      isGroup: false
+    },
+    order: [["updatedAt", "DESC"]]
+  });
+
+  if (!ticket) return null;
+
+  return { ticket, contact };
+};
+
 const findExistingTicketByConversationJid = async (
   msg: proto.IWebMessageInfo,
   whatsappId: number,
@@ -1947,17 +1976,28 @@ const handleMessage = async (
     // Agora procuramos primeiro uma mensagem enviada anteriormente para o
     // mesmo JID e continuamos exatamente naquele atendimento.
     if (!isGroup && !msg.key.fromMe) {
-      ticket = await findExistingTicketByConversationJid(
-        msg,
+      const resolvedMatch = await findExistingTicketByResolvedNumber(
+        msgContact,
         wbot.id!,
         companyId
       );
 
-      if (ticket) {
-        const linkedContact = await Contact.findByPk(ticket.contactId);
-        contact = linkedContact || await verifyContact(msgContact, wbot, companyId);
+      if (resolvedMatch) {
+        ticket = resolvedMatch.ticket;
+        contact = resolvedMatch.contact;
       } else {
-        contact = await verifyContact(msgContact, wbot, companyId);
+        ticket = await findExistingTicketByConversationJid(
+          msg,
+          wbot.id!,
+          companyId
+        );
+
+        if (ticket) {
+          const linkedContact = await Contact.findByPk(ticket.contactId);
+          contact = linkedContact || await verifyContact(msgContact, wbot, companyId);
+        } else {
+          contact = await verifyContact(msgContact, wbot, companyId);
+        }
       }
     } else {
       contact = await verifyContact(msgContact, wbot, companyId);
