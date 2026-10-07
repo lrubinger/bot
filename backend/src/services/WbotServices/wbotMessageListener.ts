@@ -17,6 +17,7 @@ import {
   WASocket,
 } from "@whiskeysockets/baileys";
 import Contact from "../../models/Contact";
+import ContactJid from "../../models/ContactJid";
 import Ticket from "../../models/Ticket";
 import Message from "../../models/Message";
 
@@ -1725,6 +1726,69 @@ export const handleMessageIntegration = async (
   }
 }
 
+const findExistingTicketByStoredJid = async (
+  msg: proto.IWebMessageInfo,
+  whatsappId: number,
+  companyId: number
+): Promise<{ ticket: Ticket; contact: Contact } | null> => {
+  const key: any = msg.key || {};
+  const candidates = Array.from(new Set(
+    [String(key.remoteJid || ""), String(key.remoteJidAlt || "")]
+      .filter(Boolean)
+  ));
+
+  if (!candidates.length) return null;
+
+  const alias = await ContactJid.findOne({
+    where: {
+      companyId,
+      whatsappId,
+      jid: { [Op.in]: candidates }
+    },
+    order: [["updatedAt", "DESC"]]
+  });
+
+  if (!alias) return null;
+
+  const contact = await Contact.findByPk(alias.contactId);
+  if (!contact) return null;
+
+  const ticket = await Ticket.findOne({
+    where: {
+      contactId: contact.id,
+      companyId,
+      whatsappId,
+      isGroup: false
+    },
+    order: [["updatedAt", "DESC"]]
+  });
+
+  if (!ticket) return null;
+  return { ticket, contact };
+};
+
+const persistConversationJids = async (
+  msg: proto.IWebMessageInfo,
+  contact: Contact,
+  whatsappId: number,
+  companyId: number
+): Promise<void> => {
+  const key: any = msg.key || {};
+  const candidates = Array.from(new Set(
+    [String(key.remoteJid || ""), String(key.remoteJidAlt || "")]
+      .filter(Boolean)
+  ));
+
+  for (const jid of candidates) {
+    await ContactJid.upsert({
+      companyId,
+      contactId: contact.id,
+      whatsappId,
+      jid
+    });
+  }
+};
+
 const findExistingTicketByResolvedNumber = async (
   msgContact: IMe & { aliases?: string[] },
   whatsappId: number,
@@ -1976,31 +2040,46 @@ const handleMessage = async (
     // Agora procuramos primeiro uma mensagem enviada anteriormente para o
     // mesmo JID e continuamos exatamente naquele atendimento.
     if (!isGroup && !msg.key.fromMe) {
-      const resolvedMatch = await findExistingTicketByResolvedNumber(
-        msgContact,
+      const storedJidMatch = await findExistingTicketByStoredJid(
+        msg,
         wbot.id!,
         companyId
       );
 
-      if (resolvedMatch) {
-        ticket = resolvedMatch.ticket;
-        contact = resolvedMatch.contact;
+      if (storedJidMatch) {
+        ticket = storedJidMatch.ticket;
+        contact = storedJidMatch.contact;
       } else {
-        ticket = await findExistingTicketByConversationJid(
-          msg,
+        const resolvedMatch = await findExistingTicketByResolvedNumber(
+          msgContact,
           wbot.id!,
           companyId
         );
 
-        if (ticket) {
-          const linkedContact = await Contact.findByPk(ticket.contactId);
-          contact = linkedContact || await verifyContact(msgContact, wbot, companyId);
+        if (resolvedMatch) {
+          ticket = resolvedMatch.ticket;
+          contact = resolvedMatch.contact;
         } else {
-          contact = await verifyContact(msgContact, wbot, companyId);
+          ticket = await findExistingTicketByConversationJid(
+            msg,
+            wbot.id!,
+            companyId
+          );
+
+          if (ticket) {
+            const linkedContact = await Contact.findByPk(ticket.contactId);
+            contact = linkedContact || await verifyContact(msgContact, wbot, companyId);
+          } else {
+            contact = await verifyContact(msgContact, wbot, companyId);
+          }
         }
       }
     } else {
       contact = await verifyContact(msgContact, wbot, companyId);
+    }
+
+    if (!isGroup) {
+      await persistConversationJids(msg, contact, wbot.id!, companyId);
     }
 
     let unreadMessages = 0;
