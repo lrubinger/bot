@@ -98,7 +98,7 @@ jobs:
               exit 1
             fi
 
-            if curl -fsS --max-time 3 http://127.0.0.1:4000/ >/dev/null 2>&1; then
+            if curl -fsS --max-time 3 http://127.0.0.1:4000/health >/dev/null 2>&1; then
               BACKEND_READY=1
               break
             fi
@@ -122,8 +122,8 @@ jobs:
           nginx -t
           systemctl reload nginx
 
-          curl -fsS --max-time 5 http://127.0.0.1:4000/ >/dev/null
-          curl -fsS --max-time 10 https://bot.portoplan.com.br/ >/dev/null
+          curl -fsS --max-time 5 http://127.0.0.1:4000/health >/dev/null
+          curl -fsS --max-time 10 https://bot.portoplan.com.br/health >/dev/null
 
           echo "DEPLOY_OK"
           REMOTE
