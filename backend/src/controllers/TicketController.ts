@@ -332,28 +332,14 @@ export const remove = async (
 
   const ticket = await ShowTicketService(ticketId, companyId);
 
-  const outgoingMessages = await Message.findAll({
-    where: {
-      ticketId: ticket.id,
-      companyId,
-      fromMe: true,
-      isDeleted: false
-    },
-    order: [["createdAt", "DESC"]]
-  });
-
-  let revoked = 0;
-  let revokeFailed = 0;
-
-  for (const message of outgoingMessages) {
-    try {
-      await DeleteWhatsAppMessage(message.id);
-      revoked += 1;
-    } catch (_) {
-      revokeFailed += 1;
-    }
-  }
-
+  // Excluir uma conversa inteira no PortoPlan deve ser uma operação local e
+  // estável. O WhatsApp não oferece uma API para apagar retrospectivamente
+  // toda uma conversa no aparelho do outro contato. Tentar revogar dezenas de
+  // mensagens em sequência aqui sobrecarregava a sessão Baileys e podia
+  // derrubar o backend, resultando em HTTP 502.
+  //
+  // A exclusão "para todos" continua disponível por mensagem, quando o
+  // WhatsApp ainda permite a revogação daquela mensagem específica.
   const deletedTicket = await DeleteTicketService(ticketId);
 
   const io = getIO();
@@ -367,9 +353,7 @@ export const remove = async (
 
   return res.status(200).json({
     message: "Conversa excluída do PortoPlan.",
-    revoked,
-    revokeFailed,
     note:
-      "Mensagens enviadas foram removidas para todos quando o WhatsApp permitiu. Mensagens recebidas não podem ser apagadas do aparelho do outro contato."
+      "A conversa foi removida do PortoPlan. Para apagar uma mensagem no WhatsApp para todos, use a ação Excluir mensagem na mensagem específica enquanto o WhatsApp ainda permitir."
   });
 };
