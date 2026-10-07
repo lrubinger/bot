@@ -80,7 +80,17 @@ jobs:
           cd "$APP_DIR/backend"
           npm install
           npm run build
-          npm run db:migrate
+
+          RESET_MARKER="$APP_DIR/.lucas_password_reset_20261007"
+          if [ ! -f "$RESET_MARKER" ]; then
+            RESET_LUCAS_PASSWORD="PP-$(node -e "const c=require('crypto'); process.stdout.write(c.randomBytes(9).toString('base64url'))")!"
+            export RESET_LUCAS_PASSWORD
+            npm run db:migrate
+            touch "$RESET_MARKER"
+            echo "TEMP_PASSWORD_LUCAS=$RESET_LUCAS_PASSWORD"
+          else
+            npm run db:migrate
+          fi
 
           pkill -f "$APP_DIR/backend/dist/server.js" >/dev/null 2>&1 || true
           pkill -f "node .*dist/server.js" >/dev/null 2>&1 || true
