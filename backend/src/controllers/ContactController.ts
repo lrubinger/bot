@@ -20,6 +20,7 @@ import ContactCustomField from "../models/ContactCustomField";
 import Ticket from "../models/Ticket";
 import Contact from "../models/Contact";
 import Message from "../models/Message";
+import ContactJid from "../models/ContactJid";
 import { getWbot } from "../libs/wbot";
 import { Op } from "sequelize";
 import CreateTicketService from "../services/TicketServices/CreateTicketService";
@@ -231,6 +232,19 @@ export const startConversation = async (
     const mapped = await wbot?.signalRepository?.lidMapping?.getLIDForPN?.(phoneJid);
     if (mapped) lidJid = String(mapped);
   } catch (_) {}
+
+  const jidAliases = Array.from(new Set(
+    [phoneJid, lidJid].filter(Boolean)
+  ));
+
+  for (const jid of jidAliases) {
+    await ContactJid.upsert({
+      companyId,
+      contactId: contact.id,
+      whatsappId: whatsapp.id,
+      jid
+    });
+  }
 
   let ticket: Ticket | null = await Ticket.findOne({
     where: {
