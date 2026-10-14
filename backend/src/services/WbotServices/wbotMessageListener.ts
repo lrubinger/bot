@@ -2776,6 +2776,13 @@ const wbotMessageListener = async (wbot: Session, companyId: number): Promise<vo
         try {
           if (!message?.key?.id) continue;
 
+          if (
+            message.key.remoteJid?.endsWith("@g.us") &&
+            !(await areWhatsappGroupsEnabled())
+          ) {
+            continue;
+          }
+
           const messageExists = await Message.count({
             where: { id: message.key.id, companyId }
           });
