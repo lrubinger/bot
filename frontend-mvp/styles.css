@@ -2466,3 +2466,36 @@ tr.clickable{cursor:pointer}tr.clickable:hover{background:#f7f8fc}
   color:#5162a6;
   white-space:nowrap;
 }
+
+
+/* Global system settings */
+.system-setting-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  padding:14px 16px;
+  border:1px solid #e0e5ef;
+  border-radius:12px;
+  background:#fff;
+}
+.system-setting-row>div{
+  min-width:0;
+  display:grid;
+  gap:4px;
+}
+.system-setting-row b{
+  color:#1f2858;
+  font-size:13px;
+}
+.system-setting-row span{
+  color:#727b92;
+  font-size:11px;
+}
+.system-setting-row .sound-switch{
+  flex:0 0 42px;
+}
+.system-setting-row .sound-switch:disabled{
+  opacity:.6;
+  cursor:wait;
+}
