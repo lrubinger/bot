@@ -2750,6 +2750,13 @@ async function loadSettings(selectedId){
     const profile=await api("/users/"+selected);
     const ownProfile=String(state.user?.id)===selected;
 
+    let systemSettings={ whatsappGroupsEnabled:false };
+    if(isMaster){
+      try{
+        systemSettings=await api("/auth/settings/system");
+      }catch(_){}
+    }
+
     let connections=[];
     try{
       const raw=await api("/whatsapp/?session=0");
@@ -2765,6 +2772,26 @@ async function loadSettings(selectedId){
           <select id="settingsUserSelect" class="settings-select">
             ${users.map(u=>`<option value="${u.id}" ${String(u.id)===selected?"selected":""}>${esc(u.name)} · ${esc(u.email||"")}</option>`).join("")}
           </select>
+        </div>`:""}
+
+      ${isMaster?`
+        <div class="settings-section">
+          <h3>Configurações globais</h3>
+          <p class="settings-help">Estas opções afetam todas as empresas e todos os usuários do Chatbot PortoPlan.</p>
+          <div class="system-setting-row">
+            <div>
+              <b>Grupos do WhatsApp</b>
+              <span id="groupsGlobalStatusText">${systemSettings.whatsappGroupsEnabled?"Ativados em todo o sistema":"Desativados em todo o sistema"}</span>
+            </div>
+            <button
+              id="groupsGlobalToggle"
+              class="sound-switch ${systemSettings.whatsappGroupsEnabled?"enabled":""}"
+              type="button"
+              role="switch"
+              aria-checked="${systemSettings.whatsappGroupsEnabled?"true":"false"}"
+              title="Ativar ou desativar grupos em todo o sistema"
+            ><span class="sound-switch-knob"></span></button>
+          </div>
         </div>`:""}
 
       <form id="profileForm">
@@ -2861,6 +2888,28 @@ async function loadSettings(selectedId){
     `;
 
     $("#settingsUserSelect")?.addEventListener("change",e=>loadSettings(e.target.value));
+
+    $("#groupsGlobalToggle")?.addEventListener("click",async e=>{
+      const button=e.currentTarget;
+      const current=button.classList.contains("enabled");
+      const next=!current;
+      button.disabled=true;
+      try{
+        const updated=await api("/auth/settings/system/groups",{
+          method:"PUT",
+          body:JSON.stringify({enabled:next})
+        });
+        const enabled=Boolean(updated?.whatsappGroupsEnabled);
+        button.classList.toggle("enabled",enabled);
+        button.setAttribute("aria-checked",enabled?"true":"false");
+        const label=$("#groupsGlobalStatusText");
+        if(label) label.textContent=enabled?"Ativados em todo o sistema":"Desativados em todo o sistema";
+      }catch(err){
+        alert(err.message||"Não foi possível alterar a configuração de grupos.");
+      }finally{
+        button.disabled=false;
+      }
+    });
 
     const phoneInput=$("#profilePhone");
     if(phoneInput) phoneInput.addEventListener("input",e=>{e.target.value=formatPhoneBR(e.target.value);});
