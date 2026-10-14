@@ -1,6 +1,7 @@
 import { Sequelize, Op } from "sequelize";
 import Contact from "../../models/Contact";
 import ContactCustomField from "../../models/ContactCustomField";
+import { areWhatsappGroupsEnabled } from "../SettingServices/WhatsappGroupsSettingService";
 
 interface Request {
   searchParam?: string;
@@ -56,11 +57,14 @@ const ListContactsService = async ({
     searchConditions.push({ id: { [Op.in]: companyContactIds } });
   }
 
+  const whatsappGroupsEnabled = await areWhatsappGroupsEnabled();
+
   const whereCondition = {
     [Op.or]: searchConditions,
     companyId: {
       [Op.eq]: companyId
-    }
+    },
+    ...(!whatsappGroupsEnabled ? { isGroup: false } : {})
   };
   const limit = 30;
   const offset = limit * (+pageNumber - 1);
