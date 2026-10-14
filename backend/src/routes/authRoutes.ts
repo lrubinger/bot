@@ -17,5 +17,7 @@ authRoutes.get("/me", isAuth, SessionController.me);
 authRoutes.get("/settings/users", isAuth, MvpSettingsController.listUsers);
 authRoutes.get("/settings/profile/:userId", isAuth, MvpSettingsController.showProfile);
 authRoutes.put("/settings/profile/:userId", isAuth, MvpSettingsController.updateProfile);
+authRoutes.get("/settings/system", isAuth, MvpSettingsController.showSystemSettings);
+authRoutes.put("/settings/system/groups", isAuth, MvpSettingsController.updateWhatsappGroups);
 
 export default authRoutes;
