@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import AppError from "../errors/AppError";
 import User from "../models/User";
 import Company from "../models/Company";
+import { areWhatsappGroupsEnabled, setWhatsappGroupsEnabled } from "../services/SettingServices/WhatsappGroupsSettingService";
 
 const attrs = [
   "id",
@@ -94,4 +95,35 @@ export const updateProfile = async (req: Request, res: Response): Promise<Respon
 
   const updated = await serialize(targetId);
   return res.json(updated);
+};
+
+
+export const showSystemSettings = async (req: Request, res: Response): Promise<Response> => {
+  const requester = await requesterFrom(req);
+  if (!isMaster(requester)) {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+
+  const whatsappGroupsEnabled = await areWhatsappGroupsEnabled();
+
+  return res.json({
+    whatsappGroupsEnabled
+  });
+};
+
+export const updateWhatsappGroups = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const requester = await requesterFrom(req);
+  if (!isMaster(requester)) {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+
+  const enabled = req.body?.enabled === true;
+  const whatsappGroupsEnabled = await setWhatsappGroupsEnabled(enabled);
+
+  return res.json({
+    whatsappGroupsEnabled
+  });
 };
