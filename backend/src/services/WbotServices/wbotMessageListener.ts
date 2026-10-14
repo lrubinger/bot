@@ -44,6 +44,7 @@ import { Op } from "sequelize";
 import { campaignQueue, parseToMilliseconds, randomValue } from "../../queues";
 import User from "../../models/User";
 import Setting from "../../models/Setting";
+import { areWhatsappGroupsEnabled } from "../SettingServices/WhatsappGroupsSettingService";
 import { cacheLayer } from "../../libs/cache";
 import { provider } from "./providers";
 import { debounce } from "../../helpers/Debounce";
@@ -1987,6 +1988,10 @@ const handleMessage = async (
 
     const isGroup = msg.key.remoteJid?.endsWith("@g.us");
 
+    if (isGroup && !(await areWhatsappGroupsEnabled())) {
+      return;
+    }
+
     const msgIsGroupBlock = await Setting.findOne({
       where: {
         companyId,
@@ -2623,6 +2628,11 @@ const handleHistoryMessage = async (
 
   try {
     const isGroup = msg.key.remoteJid.endsWith("@g.us");
+
+    if (isGroup && !(await areWhatsappGroupsEnabled())) {
+      return;
+    }
+
     let groupContact: Contact | undefined;
     let msgContact = await getContactMessage(msg, wbot);
 
