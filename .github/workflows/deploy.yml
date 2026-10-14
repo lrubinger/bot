@@ -92,18 +92,45 @@ jobs:
             npm run db:migrate
           fi
 
+          cat > /etc/systemd/system/portoplan-bot.service <<SERVICE
+          [Unit]
+          Description=ChatBot PortoPlan Backend
+          After=network.target
+
+          [Service]
+          Type=simple
+          WorkingDirectory=$APP_DIR/backend
+          EnvironmentFile=$APP_DIR/backend/.env
+          ExecStart=/usr/bin/node $APP_DIR/backend/dist/server.js
+          Restart=always
+          RestartSec=3
+          KillSignal=SIGINT
+          TimeoutStopSec=20
+          StandardOutput=append:$APP_DIR/backend-mvp.log
+          StandardError=append:$APP_DIR/backend-mvp.log
+
+          [Install]
+          WantedBy=multi-user.target
+          SERVICE
+
+          systemctl daemon-reload
+          systemctl enable portoplan-bot >/dev/null 2>&1 || true
+
+          systemctl stop portoplan-bot >/dev/null 2>&1 || true
           pkill -f "$APP_DIR/backend/dist/server.js" >/dev/null 2>&1 || true
           pkill -f "node .*dist/server.js" >/dev/null 2>&1 || true
           fuser -k 4000/tcp >/dev/null 2>&1 || true
           sleep 1
 
-          nohup node "$APP_DIR/backend/dist/server.js" > "$APP_DIR/backend-mvp.log" 2>&1 &
-          BACKEND_PID=$!
+          : > "$APP_DIR/backend-mvp.log"
+          systemctl restart portoplan-bot
 
           BACKEND_READY=0
-          for i in $(seq 1 20); do
-            if ! kill -0 "$BACKEND_PID" >/dev/null 2>&1; then
-              echo "BACKEND_START_FAILED"
+          for i in $(seq 1 30); do
+            if ! systemctl is-active --quiet portoplan-bot; then
+              echo "BACKEND_SERVICE_INACTIVE"
+              systemctl status portoplan-bot --no-pager -l || true
+              journalctl -u portoplan-bot -n 120 --no-pager || true
               tail -n 160 "$APP_DIR/backend-mvp.log" || true
               exit 1
             fi
@@ -118,6 +145,8 @@ jobs:
 
           if [ "$BACKEND_READY" -ne 1 ]; then
             echo "BACKEND_HTTP_FAILED"
+            systemctl status portoplan-bot --no-pager -l || true
+            journalctl -u portoplan-bot -n 120 --no-pager || true
             tail -n 160 "$APP_DIR/backend-mvp.log" || true
             exit 1
           fi
