@@ -12,6 +12,7 @@ import TicketTag from "../../models/TicketTag";
 import { intersection } from "lodash";
 import Whatsapp from "../../models/Whatsapp";
 import ResolveTicketAddress from "../../helpers/ResolveTicketAddress";
+import { areWhatsappGroupsEnabled } from "../SettingServices/WhatsappGroupsSettingService";
 
 interface Request {
   searchParam?: string;
@@ -214,10 +215,13 @@ const ListTicketsService = async ({
   const limit = 40;
   const offset = limit * (+pageNumber - 1);
 
+  const whatsappGroupsEnabled = await areWhatsappGroupsEnabled();
+
   whereCondition = {
     ...whereCondition,
     companyId,
-    archived: archived === "true"
+    archived: archived === "true",
+    ...(!whatsappGroupsEnabled ? { isGroup: false } : {})
   };
 
   const { count, rows: tickets } = await Ticket.findAndCountAll({
