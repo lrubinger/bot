@@ -152,8 +152,9 @@ jobs:
           fi
 
           mkdir -p "$WEB_DIR"
-          rm -rf "$WEB_DIR"/*
-          cp -a "$APP_DIR/frontend-mvp/." "$WEB_DIR/"
+          
+rsync -a --delete --exclude=v2/ "$APP_DIR/frontend-mvp/" "$WEB_DIR/"
+
           chown -R www-data:www-data "$WEB_DIR"
           find "$WEB_DIR" -type d -exec chmod 755 {} \;
           find "$WEB_DIR" -type f -exec chmod 644 {} \;
