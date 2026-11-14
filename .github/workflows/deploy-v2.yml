@@ -1,0 +1,70 @@
+name: PortoPlan BOT - Deploy V2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portoplan-bot-v2
+  cancel-in-progress: false
+
+jobs:
+  deploy-v2:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Obter interface V2
+        uses: actions/checkout@v4
+        with:
+          repository: lrubinger/portoplan-chatbot
+          ref: integracao-v2
+          path: frontend-v2
+
+      - name: Configurar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: frontend-v2/pnpm-lock.yaml
+
+      - name: Compilar V2
+        working-directory: frontend-v2
+        env:
+          VITE_APP_BASE_PATH: /v2/
+          VITE_PORTOPLAN_API_URL: /api
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+          test -s dist/index.html
+          test -d dist/assets
+
+      - name: Configurar acesso SSH existente
+        shell: bash
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_SSH_KEY" || { echo "DEPLOY_SSH_KEY nao configurado"; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/portoplan_bot_deploy
+          chmod 600 ~/.ssh/portoplan_bot_deploy
+          ssh-keygen -y -f ~/.ssh/portoplan_bot_deploy >/dev/null
+          ssh-keyscan -H 138.197.86.14 >> ~/.ssh/known_hosts
+
+      - name: Publicar somente subpasta v2
+        shell: bash
+        run: |
+          set -euo pipefail
+          SSH_OPTS="-i $HOME/.ssh/portoplan_bot_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          ssh $SSH_OPTS root@138.197.86.14 'test -f /var/www/portoplan-bot/index.html && mkdir -p /var/www/portoplan-bot/v2'
+          rsync -az --delete -e "ssh $SSH_OPTS" frontend-v2/dist/ root@138.197.86.14:/var/www/portoplan-bot/v2/
+          ssh $SSH_OPTS root@138.197.86.14 'chown -R www-data:www-data /var/www/portoplan-bot/v2 && test -s /var/www/portoplan-bot/v2/index.html'
+          echo "V2_FILES_DEPLOYED"
+          echo "Produção, backend, banco e WhatsApp não foram alterados"
