@@ -1,0 +1,4 @@
+[submodule "frontend-v2"]
+	path = frontend-v2
+	url = https://github.com/lrubinger/portoplan-chatbot.git
+	branch = main
