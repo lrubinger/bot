@@ -46,6 +46,13 @@ jobs:
           test -d dist/assets
           grep -q "/v2/assets/" dist/index.html
           test -n "$(find dist/assets -maxdepth 1 -name '*.css' -print -quit)"
+          # Deep links must resolve to V2, not the production root SPA.
+          for route in configuracoes inbox contatos chat-interno; do
+            mkdir -p "dist/$route"
+            cp dist/index.html "dist/$route/index.html"
+          done
+          echo "${GITHUB_SHA}" > dist/deploy-workflow-sha.txt
+          git rev-parse HEAD > dist/v2-source-commit.txt
 
       - name: Configurar acesso SSH existente
         shell: bash
@@ -80,5 +87,12 @@ jobs:
           test -n "$CSS_PATH" || { echo "ERRO: CSS da V2 nao encontrado no HTML"; exit 1; }
           CSS_HEADERS="$(curl --fail --silent --show-error --head --max-time 20 "https://bot.portoplan.com.br${CSS_PATH}")"
           printf "%s" "$CSS_HEADERS" | grep -qi "content-type:.*text/css" || { echo "ERRO: CSS da V2 nao esta sendo servido como CSS"; printf "%s\\n" "$CSS_HEADERS"; exit 1; }
-          echo "V2_HTTP_AND_CSS_OK"
+          for route in configuracoes inbox contatos chat-interno; do
+            ROUTE_HTML="$(curl --fail --silent --show-error --location --max-time 20 "https://bot.portoplan.com.br/v2/$route")"
+            if ! grep -q "/v2/assets/" <<< "$ROUTE_HTML"; then
+              echo "ERRO: /v2/$route esta entregando outra aplicacao (fallback incorreto)"
+              exit 1
+            fi
+          done
+          echo "V2_HTTP_CSS_AND_DEEP_LINKS_OK"
           echo "Produção, backend, banco e WhatsApp não foram alterados"
