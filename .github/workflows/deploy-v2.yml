@@ -44,6 +44,8 @@ jobs:
           pnpm build
           test -s dist/index.html
           test -d dist/assets
+          grep -q "/v2/assets/" dist/index.html
+          test -n "$(find dist/assets -maxdepth 1 -name \x27*.css\x27 -print -quit)"
 
       - name: Configurar acesso SSH existente
         shell: bash
@@ -67,4 +69,16 @@ jobs:
           rsync -az --delete -e "ssh $SSH_OPTS" frontend-v2/dist/ root@138.197.86.14:/var/www/portoplan-bot/v2/
           ssh $SSH_OPTS root@138.197.86.14 'chown -R www-data:www-data /var/www/portoplan-bot/v2 && test -s /var/www/portoplan-bot/v2/index.html'
           echo "V2_FILES_DEPLOYED"
+
+      - name: Verificar publicacao HTTP e CSS da V2
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTML="$(curl --fail --silent --show-error --location --max-time 20 https://bot.portoplan.com.br/v2/)"
+          printf "%s" "$HTML" | grep -q "/v2/assets/" || { echo "ERRO: /v2/ nao esta servindo o HTML da V2"; exit 1; }
+          CSS_PATH="$(printf "%s" "$HTML" | grep -oE "/v2/assets/[^\" ]+\\.css" | head -n 1)"
+          test -n "$CSS_PATH" || { echo "ERRO: CSS da V2 nao encontrado no HTML"; exit 1; }
+          CSS_HEADERS="$(curl --fail --silent --show-error --head --max-time 20 "https://bot.portoplan.com.br${CSS_PATH}")"
+          printf "%s" "$CSS_HEADERS" | grep -qi "content-type:.*text/css" || { echo "ERRO: CSS da V2 nao esta sendo servido como CSS"; printf "%s\\n" "$CSS_HEADERS"; exit 1; }
+          echo "V2_HTTP_AND_CSS_OK"
           echo "Produção, backend, banco e WhatsApp não foram alterados"
