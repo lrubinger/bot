@@ -45,7 +45,7 @@ jobs:
           test -s dist/index.html
           test -d dist/assets
           grep -q "/v2/assets/" dist/index.html
-          test -n "$(find dist/assets -maxdepth 1 -name \x27*.css\x27 -print -quit)"
+          test -n "$(find dist/assets -maxdepth 1 -name '*.css' -print -quit)"
 
       - name: Configurar acesso SSH existente
         shell: bash
